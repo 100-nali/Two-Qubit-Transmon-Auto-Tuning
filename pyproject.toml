@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "two-qubit-transmno-auto-tuning"
+name = "two-qubit-transmon-auto-tuning"
 version = "0.1.0"
 description = ""
 authors = ["Joel Pendleton <joelkieronpendleton@gmail.com>"]
