@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Joel Pendleton <joelkieronpendleton@gmail.com>"]
 readme = "README.md"
-packages = [{include = "two_qubit_transmno_auto_tuning"}]
+packages = [{include = "two_qubit_transmon_auto_tuning"}]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"

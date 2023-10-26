@@ -20,7 +20,6 @@ c2: Qobj = c1.dag()
 c2c1 = c1*c2
 
 # Create the qubit Hamiltonian
-# H_qubit = (omega_qubit * (sigmaz() / 2)) + (anharmonicity * sigmaz() * sigmaz() / 2)
 H_drift = (omega_q*c2c1) + 0.5*anharm*c2c1*(c2c1-qeye(dim))
 
 # Initial state (e.g., qubit in the ground state)
