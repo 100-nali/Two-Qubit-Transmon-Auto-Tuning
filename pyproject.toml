@@ -7,9 +7,37 @@ readme = "README.md"
 packages = [{include = "two_qubit_transmno_auto_tuning"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.11,<3.13"
 qutip = "^4.7.3"
+numpy = "^1.26.1"
 matplotlib = "^3.8.0"
+pylint = "^3.0.2"
+mypy = "^1.6.1"
+black = "^23.10.1"
+isort = "^5.12.0"
+taskipy = "^1.12.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.2"
+
+[tool.taskipy.tasks]
+lint = "pylint  ."
+mypy = "mypy  ."
+black = "black --exclude=.venv ." 
+isort = "isort --atomic  . "
+format = "task isort && task black"
+all_tests = "pytest  ."
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_glob = ".*"
+py_version=311
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
 
 
 [build-system]
