@@ -82,4 +82,15 @@ plt.show()
 
 #Define U:
 
+U_psi = Qobj([[1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, -1]])
+
+U_rho = spre(U_psi) * spost(U_psi.dag())
+chi = qpt(U_rho, op_basis)
+print(chi)
+fig = qpt_plot_combined(chi, op_label, r'$CPHASE')
+plt.show()
+
 #Find ideal chi:
