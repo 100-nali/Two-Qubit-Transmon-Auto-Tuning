@@ -3,6 +3,18 @@ import numpy as np
 from qutip import *
 import matplotlib.pyplot as plt
 import itertools
+from dataclasses import dataclass
+
+
+@dataclass
+class GaussianPulse:
+    amplitude: float
+    std: float
+    center: float
+
+    def __call__(self, t, *args, **kwargs):
+        return self.amplitude * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
+                self.std * np.sqrt(2 * np.pi))
 
 #Define number of energy levels
 dim = 3
@@ -10,43 +22,50 @@ dim = 3
 #Define time-stamps
 t = np.linspace(0, 10, 100)
 
-#Define basis states
-# g = basis(3, 0)
-# e = basis(3, 1)
-# f = basis(3, 2)
-# op_basis_list = [g, e, f]
-
-# op_basis_list = [
-# basis(3, 0),
-# basis(3, 1),
-# (basis(3, 0) + basis(3, 1)).unit(),
-# (basis(3, 0) - basis(3, 1)).unit(),
-# (basis(3, 0) + 1j * basis(3, 1)).unit(),
-# (basis(3, 0) - 1j * basis(3, 1)).unit()
-# ]
-
-
-
 #Define qubit 1 parameters
 w_q1: float     = 1.0
 a_q1: float     = 1.0
+r1:float  = 1.0
 
 #Define qubit 2 parameters
 w_q2: float     = 1.0
 a_q2: float     = 1.0
+r2:float  = 1.0
 
 #Define inter-qubit coupling strength
 g: float        = 1.0
+
+#Define pulse parameters - q1
+w_d1 = 1.0
+
+#Define pulse parameters - q2
+w_d2 = 1.0
+
+#phi
+phi1 = np.pi/4
+phi2 = np.pi/4
+
 
 #Define a1, a2.
 a1 = tensor(destroy(dim), qeye(dim))
 a2 = tensor(qeye(dim), destroy(dim)) 
 
+
 #Define Hamiltonian of 2-qubit system.
 H_q1 = (w_q1 * a1.dag()* a1) + (0.5 * a_q1 * a1.dag() * a1.dag() * a1 * a1)
 H_q2 = (w_q2 * a2.dag()* a2) + (0.5 * a_q2 * a2.dag() * a2.dag() * a2 * a2)
-H_int = -1 * g * (a1 - a1.dag())*(a2 - a2.dag())
-H = (H_q1 + H_q2 + H_int)
+H_q_int = -1 * g * (a1 - a1.dag())*(a2 - a2.dag())
+H_d1 = [ 
+    [0, lambda t, *args: -0.5 * r1 * np.exp(1j*(w_q1-w_d1)*t + phi1) ], 
+    [lambda t, *args: -0.5 * r1 * np.exp(-1j*((w_q1-w_d1)*t + phi1)), 0]
+    ]
+H_d2 = [ 
+    [0, lambda t, *args: -0.5 * r2 * np.exp(1j*(w_q2-w_d2)*t + phi2) ], 
+    [lambda t, *args: -0.5 * r2 * np.exp(-1j*((w_q2-w_d2)*t + phi2)), 0]]
+# H_d_int = ?
+
+
+H = [*H_q1, *H_q2 , *H_q_int,  *H_d1, *H_d2]
 
 #%% iSWAP
 
@@ -92,5 +111,3 @@ chi = qpt(U_rho, op_basis)
 print(chi)
 fig = qpt_plot_combined(chi, op_label, r'$CPHASE')
 plt.show()
-
-#Find ideal chi:
