@@ -6,55 +6,59 @@ import itertools
 from dataclasses import dataclass
 import math
 
-
-@dataclass
-class GaussianPulse:
-    amplitude: float
-    std: float
-    center: float
-
-    def __call__(self, t, *args, **kwargs):
-        return self.amplitude * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
-                self.std * np.sqrt(2 * np.pi))
-
 #Define number of energy levels
 dim = 2
 
-#Define time-stamps
-t = np.linspace(0, 10, 100)
-
 #Define qubit 1 parameters
 w_q1: float     = 1.0
-a_q1: float     = 1.0
-r1:float  = 1.0
+a_q1: float     = 1.0           #anharmonicity for qubit 1
+r1:float        = 1.0           #drive coupling for qubit 1
 
 #Define qubit 2 parameters
 w_q2: float     = 1.0
-a_q2: float     = 1.0
-r2:float  = 1.0
+a_q2: float     = 1.0           #anharmonicity for qubit 2
+r2:float        = 1.0           #drive coupling for qubit 2
 
 #Define inter-qubit coupling strength
 g: float        = 1.0
 
 #Define pulse parameters - q1
-w_d1 = 1.0
-amp_1 = 1.0
-shape_1 = lambda t, *args: math.sin(t)
+w_d1            = 1.0           #drive frequency for qubit 1
+amp_1           = 1.0           #pulse amplitude for qubit 1
+mean_1          = 0             #mean of gaussian pulse for qubit 1
+std_1           = 1.0           #std of gaussian pulse for qubit 1
 
 
 #Define pulse parameters - q2
-w_d2 = 1.0
-amp_2 = 1.0
-shape_2 = lambda t, *args: math.sin(t)
+w_d2            = 1.0
+amp_2           = 1.0
+mean_2          = 0
+std_2           = 1.0
+
 
 #phi
-phi1 = np.pi/4
-phi2 = np.pi/4
+phi1            = np.pi/4       #Phase angle for I1 and Q1
+phi2            = np.pi/4       #Phase angle for I2 and Q2
 
 
-#Define a1, a2.
+#Define time-stamps
+T               = g / (2*np.pi)                 #Final time step to propagate over
+nT              = 100                           #Number of time steps to propagate over 
+t               = np.linspace(0, T, nT)         #time vector
+
+#Define driving functions
+v_1 = lambda t, *args: amp_1 * np.exp(-(t - mean_1) ** 2 / (2 * std_1 ** 2)) / (
+                std_1 * np.sqrt(2 * np.pi)) * np.exp(1j*(w_d1*t + phi1))
+v_2 = lambda t, *args: amp_2 * np.exp(-(t - mean_2) ** 2 / (2 * std_2 ** 2)) / (
+                std_2 * np.sqrt(2 * np.pi)) * np.exp(1j*(w_d2*t + phi2))
+
+#Define a1, a2
 a1 = tensor(destroy(dim), qeye(dim))
 a2 = tensor(qeye(dim), destroy(dim))
+
+#Define n1 and n2
+n1 = a1.dag() * a1
+n2 = a2.dag() * a2
 
 #Define op_basis
 op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
@@ -62,127 +66,65 @@ op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
 #Define plot labels
 op_label = [["i", "x", "y", "z"]] * 2
 
+#Define sigma matrices for the qubits
+sigma_x1 = tensor(sigmax(), qeye(2))
+sigma_y1 = tensor(sigmay(), qeye(2))
+sigma_z1 = tensor(sigmaz(), qeye(2))
 
-# %% Define Hamiltonian of 2-qubit system.
-# H_q1 = (w_q1 * a1.dag()* a1) + (0.5 * a_q1 * a1.dag() * a1.dag() * a1 * a1)
-# H_q2 = (w_q2 * a2.dag()* a2) + (0.5 * a_q2 * a2.dag() * a2.dag() * a2 * a2)
-# H_q_int = -1 * g * (a1 - a1.dag())*(a2 - a2.dag())
-# H_d1 = [ 
-#     [0, lambda t, *args: -0.5 * r1 * amp_1 * shape_1 * np.exp(1j*(w_q1-w_d1)*t + phi1) ],
-#     [lambda t, *args: -0.5 * r1 * amp_2 * shape_2 *np.exp(-1j*((w_q1-w_d1)*t + phi1)), 0]
-#     ]
-# H_d2 = [ 
-#     [0, lambda t, *args: -0.5 * r2 * np.exp(1j*(w_q2-w_d2)*t + phi2) ],
-#     [lambda t, *args: -0.5 * r2 * np.exp(-1j*((w_q2-w_d2)*t + phi2)), 0]]
-# # H_d_int = ?
+sigma_x2 = tensor(qeye(2), sigmax())
+sigma_y2 = tensor(qeye(2), sigmay())
+sigma_z2 = tensor(qeye(2), sigmaz())
 
-# H = [*H_q1, *H_q2 , *H_q_int,  *H_d1, *H_d2]
+II       = tensor(qeye(2), qeye(2))
+XX       = tensor(sigmax(), sigmax())
+YY       = tensor(sigmay(), sigmay())
+ZZ       = tensor(sigmaz(), sigmaz())
 
+#Define Hamiltonian of 2-qubit system
+H_0 = 0.5 * w_q1 * sigma_z1 + 0.5*w_q2*sigma_z2 + 0.5* g*(sigma_y1*sigma_y2)
+H_d1 = [r1*sigma_y1 ,v_1]
+H_d2 = [r2*sigma_y2 ,v_2]
 
+H = [H_0, H_d1, H_d2]
 
-
-
-# a1 = tensor(destroy(2), qeye(2)) 
-# a2 = tensor(qeye(2), destroy(2)) 
-#  # the qubit 1 drift hamiltonian
-# H1 = [
-#     [(a_q1 / 2) * (a1.dag() * a1.dag() * a1 * a1) - w_d1 * (a1.dag() * a1), 0],
-#     [a1.dag() * a1,                                                      w_q1]
-# ]
-
-# # the qubit 1 drive hamiltonian
-# H1d = [
-#     [-r1 * 1j * (a1 - a1.dag()) / 2.,       math.cos(phi1)],
-#     [-r1 * (a1 + a1.dag()) / 2.,            math.sin(phi1)]
-# ]
-
-# # the qubit 2 drift hamiltonian
-# H2 = [
-#     [(a_q2 / 2) * (a2.dag() * a2.dag() * a2 * a2) - w_d2 * (a2.dag() * a2), 0],
-#     [(a2.dag() * a2),                                                    w_q2]
-# ]
-
-# H2d = [
-#     [-r2 * 1j * (a2 - a2.dag()) / 2.,            math.cos(phi2)],
-#     [-r2 * (a2 + a2.dag()) / 2.,                 math.sin(phi2)]
-# ]
-
-# delta_d = w_d1 - w_d2
-
-# # the interaction hamiltonian (includes interaction with drive, i think!)
-# H_int = [
-#     [a1 * a2.dag(),         lambda t, *args: g * np.exp(-1j * delta_d * t)],
-#     [a1.dag() * a2,         lambda t, *args: g * np.exp(1j * delta_d * t)]
-# ]
-
-# H = [*H1, *H1d, *H2, *H2d, *H_int]
-# print(H)
-# print(shape(H))
-# H = [H1, H1d, H2, H2d, H_int]
-# print(shape(H))
-
-# Create identity operators for the specified dimension
-identity = qutip.qeye(dim)
-a1 = qutip.tensor(qutip.destroy(dim), identity)
-a2 = qutip.tensor(identity, qutip.destroy(dim))
-
-# Define the Hamiltonian terms (adjust the operators and dimensions as needed)
-H1 = (a_q1 / 2) * (a1.dag() * a1.dag() * a1 * a1) - w_d1 * (a1.dag() * a1)
-H1d = -r1 * (a1 + a1.dag()) * (math.cos(phi1) - 1j * math.sin(phi1))
-H2 = (a_q2 / 2) * (a2.dag() * a2.dag() * a2 * a2) - w_d2 * (a2.dag() * a2)
-H2d = -r2 * (a2 + a2.dag()) * (math.cos(phi2) - 1j * math.sin(phi2))
-delta_d = w_d1 - w_d2
-H_int = a1 * a2.dag() + a1.dag() * a2
-
-# Combine Hamiltonian terms into a list (if needed)
-H = [H1, H1d, H2, H2d, [H_int, lambda t, *args: g * np.exp(-1j * delta_d * t)]]
-
-
-# %% QPT over unknown quantum process
-
-# Find chi_real ###################
-U_psi = qutip.propagator(H,t) #List of lists due to time dependence.
-# U_psi = ### Some transformative operation that converts to 'time-independent' form. (single matrix)
-U_rho = spre(U_psi) * spost(U_psi.dag())
-chi_real = qpt(U_rho, op_basis)
-# for U_psi_i in U_psi:
-#     U_rho = spre(U_psi_i) * spost(U_psi_i.dag())
-#     chi_real = qpt(U_rho, op_basis)
-fig = qpt_plot_combined(chi_real, op_label, r'$Actual Process$')
-plt.show()
 #%% iSWAP
 
-# Define Pauli matrices and the identity operator for a qutrit
-sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-identity = qeye(3)
-
 #  Define the iSWAP gate 
-U_psi =  Qobj([[1, 0, 0, 0],
-                [0, 0, 1j, 0],
-                [0, 1j, 0, 0],
-                [0, 0, 0, 1]])        
-U_rho = spre(U_psi) * spost(U_psi.dag())
-
+U_psi_iSWAP = II * (0.5+0j) + XX * 0.5j + YY * 0.5j + ZZ * (0.5+0j)             #for state vector
+U_rho_iSWAP = spre(U_psi_iSWAP) * spost(U_psi_iSWAP.dag())                      #for density matrix
 
 #Find ideal process matrix
-chi_ideal = qpt(U_rho, op_basis)
-fig = qpt_plot_combined(chi_ideal, op_label, r'$i$SWAP')
+chi_ideal_iSWAP = qpt(U_rho_iSWAP, op_basis)
+fig = qpt_plot_combined(chi_ideal_iSWAP, op_label, r'$i$SWAP')
 plt.show()
 
 
 #%% Cphase
 
-#Define U:
-U_psi = Qobj([[1, 0, 0, 0],
+#Define U: TODO: convert to tensor product form
+U_psi_cphase = Qobj([[1, 0, 0, 0],
                 [0, 1, 0, 0],
                 [0, 0, 1, 0],
                 [0, 0, 0, -1]])
 
-U_rho = spre(U_psi) * spost(U_psi.dag())
-print('U_rho for Cphase below!')
-print(U_rho)
-chi_ideal = qpt(U_rho, op_basis)
-fig = qpt_plot_combined(chi_ideal, op_label, r'$CPHASE')
+U_rho_cphase = spre(U_psi_cphase) * spost(U_psi_cphase.dag())
+chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
+
+fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
 plt.show()
+
+# %% QPT over unknown quantum process
+U_psi_real = qutip.propagator(H,t)                      #List of lists due to time dependence.
+U_psi_real = U_psi_real[nT-1]                           #Take entry from last time step
+U_rho_real = spre(U_psi_real) * spost(U_psi_real.dag())
+chi_real = qpt(U_rho_real, op_basis)
+
+fig = qpt_plot_combined(chi_real, op_label, r'$Actual Process$')
+plt.show()
+
+#%% Evaluate process fidelity
+U1 = U_rho_real
+U2 = U_rho_iSWAP
+
+gate_fidelity = process_fidelity(U_rho_real, U_rho_iSWAP, normalize=True)
+print('Process Fidelity at T = ', gate_fidelity)
