@@ -60,3 +60,45 @@
 #         return self.amplitude * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
 #                 self.std * np.sqrt(2 * np.pi))
 
+
+# %% 
+# %% Plot on Bloch Sphere  ###########################
+# b = Bloch()
+# b.make_sphere()
+# starting_states = [
+#             tensor(basis(2, 0), basis(2, 0)),
+#             tensor(basis(2, 0),basis(2, 1)),
+#             tensor(basis(2, 1),basis(2, 0)),
+#             tensor(basis(2, 1),basis(2, 1)),
+#         ]
+# states = starting_states
+
+# for U in U_psi_real:
+#     # b.add_points()                        #add expectation values of states not the states...? w.r.t. x,y,z
+#     for k,state in enumerate(states):
+#         states[k] = U* states[k]
+# b.show()
+# plt.show()
+
+#%%
+#Define driving functions
+v_1 = lambda t, *args: amp_1 * np.exp(-(t - mean_1) ** 2 / (2 * std_1 ** 2)) / (
+                std_1 * np.sqrt(2 * np.pi)) * np.exp(1j*(w_d1*t + phi1))
+v_2 = lambda t, *args: amp_2 * np.exp(-(t - mean_2) ** 2 / (2 * std_2 ** 2)) / (
+                std_2 * np.sqrt(2 * np.pi)) * np.exp(1j*(w_d2*t + phi2))
+
+
+(amp/ (std * np.sqrt(2 * np.pi))) * np.exp(-(t - mean) ** 2 / (2 * std ** 2)) 
+    return x
+
+
+
+# %% Plot v_1 and v_2 for a sanity check
+plt.plot(v_1)            
+plt.show()
+plt.plot(v_2)
+plt.show()
+
+
+gate_fidelity = abs(((U2.dag() * U1).tr()))**2
+sqrt(sqrt(chi_ideal_iSWAP) * chi_real * sqrt(chi_ideal_iSWAP)
