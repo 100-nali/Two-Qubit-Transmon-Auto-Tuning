@@ -12,26 +12,26 @@ dim:int         = 2
 
 #Define qubit 1 parameters
 w_q1: float     = 1.0 
-a_q1: float     = 1.0           #anharmonicity for qubit 1
+a_q1: float     = 2.0           #anharmonicity for qubit 1
 r1:float        = 1.0           #drive coupling for qubit 1
 
 #Define qubit 2 parameters
 w_q2: float     = 1.1
-a_q2: float     = 1.0           #anharmonicity for qubit 2
+a_q2: float     = 2.0           #anharmonicity for qubit 2
 r2:float        = 1.0           #drive coupling for qubit 2
 
 #Define inter-qubit coupling strength
-g: float        = 1.0
+g: float        = 0.001
 
 #Define pulse parameters - q1
 w_d1:float      = 1.0                   #drive frequency for qubit 1
 amp_1:float     = 0                   #pulse amplitude for qubit 1
 mean_1:float    = 0                     #mean of gaussian pulse for qubit 1
-std_1:float     = 1.0                   #std of gaussian pulse for qubit 1
+std_1:float     = 1.0 *  np.pi / (2* g)                   #std of gaussian pulse for qubit 1
 
 
 #Define pulse parameters - q2
-w_d2:float      = 1.1 
+w_d2:float      = 1.1
 amp_2:float     = 0
 mean_2:float    = 0
 std_2:float     = 1.0
@@ -54,11 +54,18 @@ args = {
     'phi2': phi2
 }
 
+#Define alternative H definition's drive term
+I1 = np.sin(np.pi/4)
+Q1 = np.cos(np.pi/4)
+I2 = np.sin(np.pi/4)
+Q2 = np.cos(np.pi/4)
 
 #Define time-stamps
 T               = 505                        #Final time step to propagate over
 nT              = 100                           #Number of time steps to propagate over (doesnt affect t_real)
 t               = np.linspace(0, T, nT)         #time vector
+
+
 
 #Define driving pulses
 def wave_shape1(t, args):
@@ -108,6 +115,10 @@ sigma_x1 = tensor(sigmax(), qeye(2))
 sigma_y1 = tensor(sigmay(), qeye(2))
 sigma_z1 = tensor(sigmaz(), qeye(2))
 
+print(sigma_x1)
+print(sigma_y1)
+print(sigma_z1)
+
 sigma_x2 = tensor(qeye(2), sigmax())
 sigma_y2 = tensor(qeye(2), sigmay())
 sigma_z2 = tensor(qeye(2), sigmaz())
@@ -119,17 +130,32 @@ ZZ       = tensor(sigmaz(), sigmaz())
 
 #Define Hamiltonian of 2-qubit system
 
-H_0 = Qobj(0.5 * w_q1 * sigma_z1 + 0.5*w_q2*sigma_z2 + 0.5* g*(sigma_y1*sigma_y2))
-H_d1 = [r1*sigma_y1 ,v_t1]
-H_d2 = [r2*sigma_y2 ,v_t2]
 
-# H = [H_0, H_d1, H_d2]
-H = H_0
+#   OPTION A ---- SELF-INFERRED SUPERPOSITION OF SINGLE-QUBIT DRIVES
+# H_0 = Qobj(0.5 * w_q1 * sigma_z1 + 0.5*w_q2*sigma_z2 + 0.5* g*(sigma_y1*sigma_y2))
+# H_d1 = [r1*sigma_y1 *amp_1,v_t1]
+# H_d2 = [r2*sigma_y2 *amp_2,v_t2]
+
+#   OPTION B ---- BARNABY'S NOTES
+delta = w_d1 - w_d2
+H_0 = n1 + n2 +\
+        0.5*(a_q1*(a1.dag() * a1.dag() * a1 * a1) +\
+        a_q2*(a2.dag() * a2.dag() * a2 * a2)) -\
+        0.5* r1*(Q1*(a1 + a1.dag()) + 1j*I1*(a1-a1.dag())) -\
+        0.5*r2*(Q2*(a2 + a2.dag()) + 1j*I2*(a2-a2.dag()))
+
+H_d1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
+H_d2 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
+
+H = [H_0, H_d1, H_d2]
+print(H[0][0].shape)
+
+# H = H_0
 
 
 # %% QPT over unknown quantum process  ###########################
-U_psi_real = qutip.propagator(H_0, t, args=args)                    #List of lists due to time dependence.
-print(U_psi_real)
+U_psi_real = qutip.propagator(H, t, args=args)                    #List of lists due to time dependence.
+# print(U_psi_real)
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
 U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
 chi_real = qpt(U_rho_real, op_basis)
@@ -147,7 +173,7 @@ U_rho_iSWAP = spre(U_psi_iSWAP) * spost(U_psi_iSWAP.dag())                      
 #Find ideal process matrix
 chi_ideal_iSWAP = qpt(U_rho_iSWAP, op_basis)
 fig = qpt_plot_combined(chi_ideal_iSWAP, op_label, r'$i$SWAP')
-plt.show()
+# plt.show()
 
 
 #%% Cphase #### #######################
@@ -163,10 +189,10 @@ U_rho_cphase = spre(U_psi_cphase) * spost(U_psi_cphase.dag())
 chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
 
 fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
-plt.show()
+# plt.show()
 
 
-#%% CNOT  ###########################
+#%% X Gate  ###########################
 U_psi_CNOT = Qobj([[1, 0, 0, 0],
        [0, 1, 0, 0],
         [0, 0, 0, 1],
@@ -175,7 +201,7 @@ U_psi_CNOT = Qobj([[1, 0, 0, 0],
 U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
 chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
 fig = qpt_plot_combined(chi_ideal_CNOT, op_label, r'$CPHASE')
-plt.show()
+# plt.show()
 
 
 #%% Evaluate process fidelity  ###########################
@@ -200,6 +226,3 @@ chi_real = Qobj(chi_real)
 fidelity = process_fidelity_s(chi_ideal, chi_real)
 
 print('iSWAP Process Fidelity at T = ', fidelity)
-
-
-#State should not vary with 0 application of drive. It however does in this simulation. 
