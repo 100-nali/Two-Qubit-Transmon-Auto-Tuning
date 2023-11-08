@@ -46,6 +46,14 @@ class Pulse:
     def __call__(self, t, *args, **kwargs):
         return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
                 self.std * np.sqrt(2 * np.pi))
+    
+
+# %% Define a Drive class
+
+class Drive:
+    def __init__(self, I, Q):
+        self.I = I
+        self.Q = Q
 
 #%% Define the Qubits
 qubit_1 = Qubit(
@@ -65,15 +73,21 @@ qubit_2 = Qubit(
 )
 
 #%% Define the pulses at qubits 1 and 2
-I1 = Pulse(
+
+drive_1 =  Drive(
+    I = Pulse(
     amp = np.pi *100/ 2,
     center= T/2 ,                    
     std = T/6              
+),
+Q = 0
 )
 
-Q1 = 0
-I2 = 0
-Q2 = 0
+drive_2 =  Drive(
+    I = 0    ,      
+    Q = 0
+)
+
 
 # %% Define a1, a2
 a1 = tensor(destroy(dim), qeye(dim))
@@ -113,10 +127,10 @@ H_0 = n1 + n2 +\
         qubit_2.a_q*(a2.dag() * a2.dag() * a2 * a2))
 
 #Drive Components
-H_d1_0a = - 0.5* qubit_1.r*(a1 + a1.dag())*Q1
-H_d1_0b = [-0.5*qubit_1.r * 1j*(a1-a1.dag()), I1]
-H_d2_0a = - 0.5*qubit_2.r*(a2 + a2.dag())*Q2
-H_d2_0b = 1j*(a2-a2.dag())* I2
+H_d1_0a = - 0.5* qubit_1.r*(a1 + a1.dag())*drive_1.Q
+H_d1_0b = [-0.5*qubit_1.r * 1j*(a1-a1.dag()), drive_1.I]
+H_d2_0a = - 0.5*qubit_2.r*(a2 + a2.dag())*drive_2.Q
+H_d2_0b = 1j*(a2-a2.dag())* drive_2.I
 
 H_d1_1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
 H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
@@ -129,6 +143,8 @@ U_psi_real = qutip.propagator(H, times)                    #List of lists due to
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
 
 # TODO: Plot what's going on over the bloch sphere.
+
+
 
 U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
 chi_real = qpt(U_rho_real, op_basis)
