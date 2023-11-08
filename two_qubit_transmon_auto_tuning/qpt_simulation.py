@@ -50,17 +50,17 @@ class Drive:
 qubit_1 = Qubit(
     i = 1,
     w_q = 5 * 2 * np.pi ,
-    a_q = 0.3 * 2 * np.pi,
+    a_q = -0.3 * 2 * np.pi,
     r = 0.01 * 2 * np.pi,
     w_d = 5 * 2 * np.pi
 )
 
 qubit_2 = Qubit(
     i = 2,
-    w_q = 5 * 2 * np.pi,
-    a_q = 0.3 * 2 * np.pi,
+    w_q = 6 * 2 * np.pi,
+    a_q = -0.3 * 2 * np.pi,
     r = 0.01 * 2 * np.pi,
-    w_d = 5 * 2 * np.pi
+    w_d = 6 * 2 * np.pi
 )
 
 #%% Define the pulses at qubits 1 and 2
@@ -84,12 +84,13 @@ def create_H(qubits, drives):
     q1, q2 = qubits
     d1, d2 = drives
 
-    delta = q1.w_d - q2.w_d
+    Delta_1 = q1.w_q - q1.w_d
+    Delta_2 = q2.w_q - q2.w_d
+
+    delta = q1.w_q - q2.w_q
 
     #Autonomous
-    H_0 = n1 + n2 +\
-            0.5*(q1.a_q*(a1.dag() * a1.dag() * a1 * a1) +\
-            q2.a_q*(a2.dag() * a2.dag() * a2 * a2))
+    H_0 = Delta_1 * n1 + Delta_2 * n2
 
     #Drive terms
     if type(d1.I) == Pulse:
