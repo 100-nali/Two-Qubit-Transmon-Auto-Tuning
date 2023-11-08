@@ -77,14 +77,14 @@ qubit_2 = Qubit(
 drive_1 =  Drive(
     I = Pulse(
     amp = np.pi *100/ 2,
-    center= T/2 ,                    
+    center= T/2,                    
     std = T/6              
 ),
 Q = 0
 )
 
 drive_2 =  Drive(
-    I = 0    ,      
+    I = 0,      
     Q = 0
 )
 
@@ -119,30 +119,51 @@ ZZ       = tensor(sigmaz(), sigmaz())
 
 
 #%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
-delta = qubit_1.w_d - qubit_2.w_d
 
-#Autonomous
-H_0 = n1 + n2 +\
-        0.5*(qubit_1.a_q*(a1.dag() * a1.dag() * a1 * a1) +\
-        qubit_2.a_q*(a2.dag() * a2.dag() * a2 * a2))
+def create_H(qubits, drives):
+    q1 = qubits[0]
+    q2 = qubits[1]
+    d1 = drives[0]
+    d2 = drives[1]
 
-#Drive Components
-H_d1_0a = - 0.5* qubit_1.r*(a1 + a1.dag())*drive_1.Q
-H_d1_0b = [-0.5*qubit_1.r * 1j*(a1-a1.dag()), drive_1.I]
-H_d2_0a = - 0.5*qubit_2.r*(a2 + a2.dag())*drive_2.Q
-H_d2_0b = 1j*(a2-a2.dag())* drive_2.I
+    delta = q1.w_d - q2.w_d
 
-H_d1_1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
-H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
+    #Autonomous
+    H_0 = n1 + n2 +\
+            0.5*(q1.a_q*(a1.dag() * a1.dag() * a1 * a1) +\
+            q2.a_q*(a2.dag() * a2.dag() * a2 * a2))
 
-#Total H
-H = [H_0, H_d1_0a, H_d1_0b, H_d1_1, H_d2_1]
+    if type(d1.I) == Pulse:
+        H_d1_0b = [-0.5*q1.r * 1j*(a1-a1.dag()), d1.I]
+    else:
+        H_d1_0b = -0.5*q1.r * 1j*(a1-a1.dag())* d1.I
+    if type(d1.Q) == Pulse:
+        H_d1_0a = [- 0.5* q1.r*(a1 + a1.dag()),d1.Q]
+    else:
+        H_d1_0a = - 0.5* q1.r*(a1 + a1.dag())*d1.Q
+    if type(d2.I) == Pulse:
+        H_d2_0b = [1j*(a2-a2.dag()), d2.I]
+    else:
+        H_d2_0b = 1j*(a2-a2.dag())* d2.I
+    if type(d2.Q) == Pulse:
+        H_d2_0a = [- 0.5*q2.r*(a2 + a2.dag()),d2.Q]
+    else:
+        H_d2_0a = - 0.5*q2.r*(a2 + a2.dag())*d2.Q
+   
+    H_d1_1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
+    H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
+
+    #Total H
+    H = [H_0, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
+    return H
 
 # %% QPT over unknown quantum process  ###########################
+H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
 U_psi_real = qutip.propagator(H, times)                    #List of lists due to time dependence.
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
 
 # TODO: Plot what's going on over the bloch sphere.
+
 
 
 
