@@ -6,97 +6,76 @@ import itertools
 from dataclasses import dataclass
 import math
 
-
 #Define number of energy levels
 dim:int         = 2
 
-#Define qubit 1 parameters
-w_q1: float     = 1.0 
-a_q1: float     = 2.0           #anharmonicity for qubit 1
-r1:float        = 1.0           #drive coupling for qubit 1
-
-#Define qubit 2 parameters
-w_q2: float     = 1.1
-a_q2: float     = 2.0           #anharmonicity for qubit 2
-r2:float        = 1.0           #drive coupling for qubit 2
+#Define time-stampss
+T:float         = 500                        #Final time step to propagate over
+nT:int          = 100                           #Number of time steps to propagate over (doesnt affect t_real)
+times           = np.linspace(0, T, nT)         #time vector
 
 #Define inter-qubit coupling strength
-g: float        = 0.001
+g: float        = 0.005 * 2 * np.pi
 
-#Define pulse parameters - q1
-w_d1:float      = 1.0                   #drive frequency for qubit 1
-amp_1:float     = 0                   #pulse amplitude for qubit 1
-mean_1:float    = 0                     #mean of gaussian pulse for qubit 1
-std_1:float     = 1.0 *  np.pi / (2* g)                   #std of gaussian pulse for qubit 1
+# %% Define a Qubit class
+class Qubit:
+    i: int
+    w_q: float
+    a_q: float
+    r: float
+    w_d: float
 
+    def __init__(self, i, w_q, a_q, r, w_d):
+        self.i = i
+        self.w_q = w_q
+        self.a_q = a_q
+        self.r = r
+        self.w_d = w_d
 
-#Define pulse parameters - q2
-w_d2:float      = 1.1
-amp_2:float     = 0
-mean_2:float    = 0
-std_2:float     = 1.0
+# %% Define a Pulse class
+class Pulse:
+    amp: float
+    center: float
+    std: float
 
+    def __init__(self, amp, center, std):
+        self.amp = amp
+        self.center = center
+        self.std = std
 
-#phi
-phi1            = np.pi/2              #Phase angle for I1 and Q1
-phi2            = np.pi/2               #Phase angle for I2 and Q2
+    def __call__(self, t, *args, **kwargs):
+        return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
+                self.std * np.sqrt(2 * np.pi))
 
+#%% Define the Qubits
+qubit_1 = Qubit(
+    i = 1,
+    w_q = 5 * 2 * np.pi ,
+    a_q = 0.3 * 2 * np.pi,
+    r = 0.01 * 2 * np.pi,
+    w_d = 5 * 2 * np.pi
+)
 
-#Define args
-args = {
-    'w_d1' : w_d1,
-    'std_1' : std_1,
-    'mean_1': mean_1,
-    'phi1' : phi1,
-    'w_d2' : w_d2,
-    'std_2' : std_2,
-    'mean_2': mean_2,
-    'phi2': phi2
-}
+qubit_2 = Qubit(
+    i = 2,
+    w_q = 5 * 2 * np.pi,
+    a_q = 0.3 * 2 * np.pi,
+    r = 0.01 * 2 * np.pi,
+    w_d = 5 * 2 * np.pi
+)
 
-#Define alternative H definition's drive term
-I1 = np.sin(np.pi/4)
-Q1 = np.cos(np.pi/4)
-I2 = np.sin(np.pi/4)
-Q2 = np.cos(np.pi/4)
+#%% Define the pulses at qubits 1 and 2
+I1 = Pulse(
+    amp = np.pi *100/ 2,
+    center= T/2 ,                    
+    std = T/6              
+)
 
-#Define time-stamps
-T               = 505                        #Final time step to propagate over
-nT              = 100                           #Number of time steps to propagate over (doesnt affect t_real)
-t               = np.linspace(0, T, nT)         #time vector
+Q1 = 0
+I2 = 0
+Q2 = 0
 
-
-
-#Define driving pulses
-def wave_shape1(t, args):
-    x = np.exp(1j*(args['w_d1']*t + args['phi1']))
-    return x
-
-def wave_shape2(t, args):
-    x = np.exp(1j*(args['w_d2']*t + args['phi2']))
-    return x
-
-def pulse_shape1(t, args):
-    x = 1.0/ (np.sqrt(2.0 * np.pi) * args['std_1']) * np.exp(-np.power((t - args['mean_1']) / args['std_2'], 2.0) / 2)
-    return x
-
-def pulse_shape2(t, args):
-    x = 1.0/ (np.sqrt(2.0 * np.pi) * args['std_2']) * np.exp(-np.power((t - args['mean_2']) / args['std_2'], 2.0) / 2)
-    return x
-
-def v_t1(t, args):
-    x = wave_shape1(t, args)
-    y = pulse_shape1(t,args)
-    v = x*y
-    return v
-
-def v_t2(t, args):
-    x = wave_shape2(t, args)
-    y = pulse_shape2(t,args)
-    v = x*y
-    return v
-
-#Define a1, a2
+# %% Define a1, a2
 a1 = tensor(destroy(dim), qeye(dim))
 a2 = tensor(qeye(dim), destroy(dim))
 
@@ -115,10 +94,6 @@ sigma_x1 = tensor(sigmax(), qeye(2))
 sigma_y1 = tensor(sigmay(), qeye(2))
 sigma_z1 = tensor(sigmaz(), qeye(2))
 
-print(sigma_x1)
-print(sigma_y1)
-print(sigma_z1)
-
 sigma_x2 = tensor(qeye(2), sigmax())
 sigma_y2 = tensor(qeye(2), sigmay())
 sigma_z2 = tensor(qeye(2), sigmaz())
@@ -128,35 +103,33 @@ XX       = tensor(sigmax(), sigmax())
 YY       = tensor(sigmay(), sigmay())
 ZZ       = tensor(sigmaz(), sigmaz())
 
-#Define Hamiltonian of 2-qubit system
 
+#%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
+delta = qubit_1.w_d - qubit_2.w_d
 
-#   OPTION A ---- SELF-INFERRED SUPERPOSITION OF SINGLE-QUBIT DRIVES
-# H_0 = Qobj(0.5 * w_q1 * sigma_z1 + 0.5*w_q2*sigma_z2 + 0.5* g*(sigma_y1*sigma_y2))
-# H_d1 = [r1*sigma_y1 *amp_1,v_t1]
-# H_d2 = [r2*sigma_y2 *amp_2,v_t2]
-
-#   OPTION B ---- BARNABY'S NOTES
-delta = w_d1 - w_d2
+#Autonomous
 H_0 = n1 + n2 +\
-        0.5*(a_q1*(a1.dag() * a1.dag() * a1 * a1) +\
-        a_q2*(a2.dag() * a2.dag() * a2 * a2)) -\
-        0.5* r1*(Q1*(a1 + a1.dag()) + 1j*I1*(a1-a1.dag())) -\
-        0.5*r2*(Q2*(a2 + a2.dag()) + 1j*I2*(a2-a2.dag()))
+        0.5*(qubit_1.a_q*(a1.dag() * a1.dag() * a1 * a1) +\
+        qubit_2.a_q*(a2.dag() * a2.dag() * a2 * a2))
 
-H_d1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
-H_d2 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
+#Drive Components
+H_d1_0a = - 0.5* qubit_1.r*(a1 + a1.dag())*Q1
+H_d1_0b = [-0.5*qubit_1.r * 1j*(a1-a1.dag()), I1]
+H_d2_0a = - 0.5*qubit_2.r*(a2 + a2.dag())*Q2
+H_d2_0b = 1j*(a2-a2.dag())* I2
 
-H = [H_0, H_d1, H_d2]
-print(H[0][0].shape)
+H_d1_1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
+H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
 
-# H = H_0
-
+#Total H
+H = [H_0, H_d1_0a, H_d1_0b, H_d1_1, H_d2_1]
 
 # %% QPT over unknown quantum process  ###########################
-U_psi_real = qutip.propagator(H, t, args=args)                    #List of lists due to time dependence.
-# print(U_psi_real)
+U_psi_real = qutip.propagator(H, times)                    #List of lists due to time dependence.
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
+
+# TODO: Plot what's going on over the bloch sphere.
+
 U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
 chi_real = qpt(U_rho_real, op_basis)
 
@@ -172,7 +145,7 @@ U_rho_iSWAP = spre(U_psi_iSWAP) * spost(U_psi_iSWAP.dag())                      
 
 #Find ideal process matrix
 chi_ideal_iSWAP = qpt(U_rho_iSWAP, op_basis)
-fig = qpt_plot_combined(chi_ideal_iSWAP, op_label, r'$i$SWAP')
+# fig = qpt_plot_combined(chi_ideal_iSWAP, op_label, r'$i$SWAP')
 # plt.show()
 
 
@@ -188,7 +161,7 @@ U_psi_cphase = Qobj([[1, 0, 0, 0],
 U_rho_cphase = spre(U_psi_cphase) * spost(U_psi_cphase.dag())
 chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
 
-fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
+# fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
 # plt.show()
 
 
@@ -201,7 +174,7 @@ U_psi_CNOT = Qobj([[1, 0, 0, 0],
 U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
 chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
 fig = qpt_plot_combined(chi_ideal_CNOT, op_label, r'$CPHASE')
-# plt.show()
+plt.show()
 
 
 #%% Evaluate process fidelity  ###########################
