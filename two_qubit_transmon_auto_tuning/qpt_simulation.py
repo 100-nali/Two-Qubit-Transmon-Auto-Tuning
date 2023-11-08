@@ -10,34 +10,27 @@ import math
 dim:int         = 2
 
 #Define time-stampss
-T:float         = 500                        #Final time step to propagate over
-nT:int          = 100                           #Number of time steps to propagate over (doesnt affect t_real)
-times           = np.linspace(0, T, nT)         #time vector
+T:float         = 71                                    #Indicator of pulse time
+t_meas:float    = 10                                    #Time to take measurement - fixed.
+total_T:float   = T + t_meas
+nT:int          = 100                                   #Number of time steps to propagate over 
+times           = np.linspace(0, total_T, nT)           #Time vector
+
 
 #Define inter-qubit coupling strength
 g: float        = 0.005 * 2 * np.pi
 
 # %% Define a Qubit class
 class Qubit:
-    i: int
-    w_q: float
-    a_q: float
-    r: float
-    w_d: float
-
     def __init__(self, i, w_q, a_q, r, w_d):
-        self.i = i
-        self.w_q = w_q
-        self.a_q = a_q
-        self.r = r
-        self.w_d = w_d
+        self.i = i              #index
+        self.w_q = w_q          #qubit freq
+        self.a_q = a_q          #anharmonicity
+        self.r = r              #drive coupling
+        self.w_d = w_d          #drive freq
 
 # %% Define a Pulse class
 class Pulse:
-    amp: float
-    center: float
-    std: float
-
     def __init__(self, amp, center, std):
         self.amp = amp
         self.center = center
@@ -47,15 +40,13 @@ class Pulse:
         return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
                 self.std * np.sqrt(2 * np.pi))
     
-
 # %% Define a Drive class
-
 class Drive:
     def __init__(self, I, Q):
-        self.I = I
-        self.Q = Q
+        self.I = I          #in-phase drive
+        self.Q = Q          #quadrature drive
 
-#%% Define the Qubits
+#%% Define the qubits
 qubit_1 = Qubit(
     i = 1,
     w_q = 5 * 2 * np.pi ,
@@ -73,21 +64,60 @@ qubit_2 = Qubit(
 )
 
 #%% Define the pulses at qubits 1 and 2
-
 drive_1 =  Drive(
     I = Pulse(
     amp = np.pi *100/ 2,
-    center= T/2,                    
-    std = T/6              
+    center= T/2, 
+    std = T/6
 ),
 Q = 0
 )
 
 drive_2 =  Drive(
-    I = 0,      
+    I = 0,
     Q = 0
 )
 
+#%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
+
+def create_H(qubits, drives):
+    q1, q2 = qubits
+    d1, d2 = drives
+
+    delta = q1.w_d - q2.w_d
+
+    #Autonomous
+    H_0 = n1 + n2 +\
+            0.5*(q1.a_q*(a1.dag() * a1.dag() * a1 * a1) +\
+            q2.a_q*(a2.dag() * a2.dag() * a2 * a2))
+
+    #Drive terms
+    if type(d1.I) == Pulse:
+        H_d1_0b = [-0.5*q1.r * 1j*(a1-a1.dag()), d1.I]
+    else:
+        H_d1_0b = -0.5*q1.r * 1j*(a1-a1.dag())* d1.I
+
+    if type(d1.Q) == Pulse:
+        H_d1_0a = [- 0.5* q1.r*(a1 + a1.dag()),d1.Q]
+    else:
+        H_d1_0a = - 0.5* q1.r*(a1 + a1.dag())*d1.Q
+
+    if type(d2.I) == Pulse:
+        H_d2_0b = [1j*(a2-a2.dag()), d2.I]
+    else:
+        H_d2_0b = 1j*(a2-a2.dag())* d2.I
+
+    if type(d2.Q) == Pulse:
+        H_d2_0a = [- 0.5*q2.r*(a2 + a2.dag()),d2.Q]
+    else:
+        H_d2_0a = - 0.5*q2.r*(a2 + a2.dag())*d2.Q
+   
+    H_d1_1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
+    H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
+
+    #Total H
+    H = [H_0, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
+    return H
 
 # %% Define a1, a2
 a1 = tensor(destroy(dim), qeye(dim))
@@ -117,54 +147,44 @@ XX       = tensor(sigmax(), sigmax())
 YY       = tensor(sigmay(), sigmay())
 ZZ       = tensor(sigmaz(), sigmaz())
 
+# %% TODO: Implement Power Rabi ##################################
+###Comment this out if you want the rest of the code to work/run
+amps = np.linspace(0, 100, 100)
+outputs = np.zeros([len(amps), len(times), 8])
+for i,amp in enumerate(amps):
+    #change I1 amp to amp
+    drive_1.I.amp = amp
 
-#%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
+    #Define starting states
+    psi0 = tensor(basis(2, 0), basis(2, 0))
 
-def create_H(qubits, drives):
-    q1 = qubits[0]
-    q2 = qubits[1]
-    d1 = drives[0]
-    d2 = drives[1]
+    #create H
+    H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
 
-    delta = q1.w_d - q2.w_d
+    #input to mesolve
+    res = mesolve(H, psi0, times, [], [sigma_x1, sigma_y1, sigma_z1, sigma_x2, sigma_y2, sigma_z2, n1, n2])
+    outputs[i, ...] = np.stack(res.expect, axis=-1)
+print(shape(outputs))
 
-    #Autonomous
-    H_0 = n1 + n2 +\
-            0.5*(q1.a_q*(a1.dag() * a1.dag() * a1 * a1) +\
-            q2.a_q*(a2.dag() * a2.dag() * a2 * a2))
+fig, ax = plt.subplots(1, 1)
+ax.plot(amps, outputs[:, -1, 3 * (qubit_1.i - 1)], label='X', linestyle='--')
+ax.plot(amps, outputs[:, -1, 3 * (qubit_1.i - 1) + 1], label='Y', linestyle='--')
+ax.plot(amps, outputs[:, -1, 3 * (qubit_1.i - 1) + 2], label='Z')
 
-    if type(d1.I) == Pulse:
-        H_d1_0b = [-0.5*q1.r * 1j*(a1-a1.dag()), d1.I]
-    else:
-        H_d1_0b = -0.5*q1.r * 1j*(a1-a1.dag())* d1.I
-    if type(d1.Q) == Pulse:
-        H_d1_0a = [- 0.5* q1.r*(a1 + a1.dag()),d1.Q]
-    else:
-        H_d1_0a = - 0.5* q1.r*(a1 + a1.dag())*d1.Q
-    if type(d2.I) == Pulse:
-        H_d2_0b = [1j*(a2-a2.dag()), d2.I]
-    else:
-        H_d2_0b = 1j*(a2-a2.dag())* d2.I
-    if type(d2.Q) == Pulse:
-        H_d2_0a = [- 0.5*q2.r*(a2 + a2.dag()),d2.Q]
-    else:
-        H_d2_0a = - 0.5*q2.r*(a2 + a2.dag())*d2.Q
-   
-    H_d1_1 = [g*a1*a2.dag(), lambda t, *args: np.exp(-1j*delta*t)]
-    H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
+ax.set_ylim([-1, 1])
+ax.set_xlabel('Amplitude')
+ax.set_ylabel('Expectation value')
+ax.set_title('Power Rabi Oscillations')
+ax.legend()
+plt.show()
 
-    #Total H
-    H = [H_0, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
-    return H
 
 # %% QPT over unknown quantum process  ###########################
 H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
-U_psi_real = qutip.propagator(H, times)                    #List of lists due to time dependence.
+U_psi_real = qutip.propagator(H, times)                   #List of matrices due to time dependence.
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
 
 # TODO: Plot what's going on over the bloch sphere.
-
-
 
 
 U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
@@ -172,7 +192,6 @@ chi_real = qpt(U_rho_real, op_basis)
 
 fig = qpt_plot_combined(chi_real, op_label, r'$Actual Process$')
 plt.show()
-
 
 #%% iSWAP ###########################
 
