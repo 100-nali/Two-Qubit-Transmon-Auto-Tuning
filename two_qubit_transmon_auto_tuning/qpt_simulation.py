@@ -13,7 +13,7 @@ dim:int         = 2
 T:float         = 71                                    #Indicator of pulse time
 t_meas:float    = 10                                    #Time to take measurement - fixed.
 total_T:float   = T + t_meas
-nT:int          = 100                                   #Number of time steps to propagate over 
+nT:int          = 100                                   #Number of time steps to propagate over
 times           = np.linspace(0, total_T, nT)           #Time vector
 
 
@@ -40,6 +40,19 @@ class Pulse:
         return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
                 self.std * np.sqrt(2 * np.pi))
     
+# %% Define a DRAG class
+
+class DRAG(Pulse):
+    def __init__(self, amp, center, std, l, q):
+        Pulse.__init__(self, amp, center, std)
+        self. l = l
+        self.q = q
+
+
+    def __call__(self, t, *args, **kwargs):
+        return (-2 * t * self.l/self.q.a_q) * self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
+            self.std * np.sqrt(2 * np.pi))
+    
 # %% Define a Drive class
 class Drive:
     def __init__(self, I, Q):
@@ -65,12 +78,19 @@ qubit_2 = Qubit(
 
 #%% Define the pulses at qubits 1 and 2
 drive_1 =  Drive(
-    I = Pulse(
+    I = DRAG(
     amp = np.pi *100/ 2,
-    center= T/2, 
+    center= T/2,
+    std = T/6,
+    l = 0.5,
+    q = qubit_1
+    ),
+
+    Q = Pulse(
+    amp = np.pi *100/ 2,
+    center= T/2,
     std = T/6
-),
-Q = 0
+)
 )
 
 drive_2 =  Drive(
@@ -93,22 +113,22 @@ def create_H(qubits, drives):
     H_0 = Delta_1 * n1 + Delta_2 * n2
 
     #Drive terms
-    if type(d1.I) == Pulse:
+    if type(d1.I) == Pulse or type(d1.I) == DRAG:
         H_d1_0b = [-0.5*q1.r * 1j*(a1-a1.dag()), d1.I]
     else:
         H_d1_0b = -0.5*q1.r * 1j*(a1-a1.dag())* d1.I
 
-    if type(d1.Q) == Pulse:
+    if type(d1.Q) == Pulse or type(d1.Q) == DRAG:
         H_d1_0a = [- 0.5* q1.r*(a1 + a1.dag()),d1.Q]
     else:
         H_d1_0a = - 0.5* q1.r*(a1 + a1.dag())*d1.Q
 
-    if type(d2.I) == Pulse:
+    if type(d2.I) == Pulse or type(d2.I) == DRAG:
         H_d2_0b = [1j*(a2-a2.dag()), d2.I]
     else:
         H_d2_0b = 1j*(a2-a2.dag())* d2.I
 
-    if type(d2.Q) == Pulse:
+    if type(d2.Q) == Pulse or type(d2.Q) == DRAG:
         H_d2_0a = [- 0.5*q2.r*(a2 + a2.dag()),d2.Q]
     else:
         H_d2_0a = - 0.5*q2.r*(a2 + a2.dag())*d2.Q
@@ -148,13 +168,12 @@ XX       = tensor(sigmax(), sigmax())
 YY       = tensor(sigmay(), sigmay())
 ZZ       = tensor(sigmaz(), sigmaz())
 
-# %% TODO: Implement Power Rabi ##################################
-###Comment this out if you want the rest of the code to work/run
+# %% Power Rabi ##################################
 amps = np.linspace(0, 100, 100)
 outputs = np.zeros([len(amps), len(times), 8])
 for i,amp in enumerate(amps):
     #change I1 amp to amp
-    drive_1.I.amp = amp
+    drive_1.Q.amp = amp
 
     #Define starting states
     psi0 = tensor(basis(2, 0), basis(2, 0))
@@ -181,6 +200,7 @@ plt.show()
 
 
 # %% QPT over unknown quantum process  ###########################
+drive_1.Q.amp = 50
 H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
 U_psi_real = qutip.propagator(H, times)                   #List of matrices due to time dependence.
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
@@ -223,10 +243,12 @@ chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
 
 
 #%% X Gate  ###########################
-U_psi_CNOT = Qobj([[1, 0, 0, 0],
-       [0, 1, 0, 0],
-        [0, 0, 0, 1],
-        [0, 0, 1, 0]])
+# U_psi_CNOT = Qobj([[1, 0, 0, 0],
+#        [0, 1, 0, 0],
+#         [0, 0, 0, 1],
+#         [0, 0, 1, 0]])
+
+U_psi_CNOT = tensor(sigmax(),qeye(2))
 
 U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
 chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
@@ -251,8 +273,8 @@ def process_fidelity_s(chi_ideal, chi_real):
 
     return fidelity
 
-chi_ideal = Qobj(chi_ideal_iSWAP)
+chi_ideal = Qobj(chi_ideal_CNOT)
 chi_real = Qobj(chi_real)
 fidelity = process_fidelity_s(chi_ideal, chi_real)
 
-print('iSWAP Process Fidelity at T = ', fidelity)
+print('X-Gate Process Fidelity at T = ', fidelity)
