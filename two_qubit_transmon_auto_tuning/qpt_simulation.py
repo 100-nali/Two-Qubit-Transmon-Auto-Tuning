@@ -9,7 +9,7 @@ import math
 #Define number of energy levels
 dim:int         = 2
 
-#Define time-stampss
+#Define time-stamps
 T:float         = 71                                    #Indicator of pulse time
 t_meas:float    = 10                                    #Time to take measurement - fixed.
 total_T:float   = T + t_meas
@@ -41,7 +41,6 @@ class Pulse:
                 self.std * np.sqrt(2 * np.pi))
     
 # %% Define a DRAG class
-
 class DRAG(Pulse):
     def __init__(self, amp, center, std, l, q):
         Pulse.__init__(self, amp, center, std)
@@ -78,13 +77,14 @@ qubit_2 = Qubit(
 
 #%% Define the pulses at qubits 1 and 2
 drive_1 =  Drive(
-    I = DRAG(
-    amp = np.pi *100/ 2,
-    center= T/2,
-    std = T/6,
-    l = 0.5,
-    q = qubit_1
-    ),
+    # I = DRAG(
+    # amp = np.pi *100/ 2,
+    # center= T/2,
+    # std = T/6,
+    # l = 0.5,
+    # q = qubit_1
+    # ),
+    I = 0,
 
     Q = Pulse(
     amp = np.pi *100/ 2,
@@ -184,7 +184,6 @@ for i,amp in enumerate(amps):
     #input to mesolve
     res = mesolve(H, psi0, times, [], [sigma_x1, sigma_y1, sigma_z1, sigma_x2, sigma_y2, sigma_z2, n1, n2])
     outputs[i, ...] = np.stack(res.expect, axis=-1)
-print(shape(outputs))
 
 fig, ax = plt.subplots(1, 1)
 ax.plot(amps, outputs[:, -1, 3 * (qubit_1.i - 1)], label='X', linestyle='--')
@@ -201,6 +200,7 @@ plt.show()
 
 # %% QPT over unknown quantum process  ###########################
 drive_1.Q.amp = 50
+# drive_1.I.amp = 50
 H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
 U_psi_real = qutip.propagator(H, times)                   #List of matrices due to time dependence.
 U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
@@ -221,7 +221,7 @@ U_psi_iSWAP = II * (0.5+0j) + XX * 0.5j + YY * 0.5j + ZZ * (0.5+0j)             
 U_rho_iSWAP = spre(U_psi_iSWAP) * spost(U_psi_iSWAP.dag())                      #for density matrix
 
 #Find ideal process matrix
-chi_ideal_iSWAP = qpt(U_rho_iSWAP, op_basis)
+chi_ideal_iSWAP = qpt( U_rho_iSWAP, op_basis)
 # fig = qpt_plot_combined(chi_ideal_iSWAP, op_label, r'$i$SWAP')
 # plt.show()
 
@@ -238,8 +238,8 @@ U_psi_cphase = Qobj([[1, 0, 0, 0],
 U_rho_cphase = spre(U_psi_cphase) * spost(U_psi_cphase.dag())
 chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
 
-# fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
-# plt.show()
+fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
+plt.show()
 
 
 #%% X Gate  ###########################
