@@ -6,6 +6,7 @@ import scipy
 ## Bayesian Optimisation for a random Objective function-----example
 
 #Define objective function - this gives the real underlying evaluations
+#In the context of gate optimization, this can equal process fidelity.
 def objective(x, noise=0.1):
  n = np.random.normal(loc=0, scale=noise)
  out:float = x**2 * np.sin(5 * np.pi * x)**6.0 + n
@@ -24,7 +25,7 @@ def plot(X, y, model):
  plt.plot(Xsamples, ysamples)
  plt.show()
 
-# probability of improvement acquisition function
+# PI acquisition function
 def acquisition(X, Xsamples, model):
  # calculate the best surrogate score found so far
  yhat, _ = surrogate(model, X)
@@ -47,7 +48,7 @@ def opt_acquisition(X, y, model):
  ix = np.argmax(scores)
  return Xsamples[ix, 0]
 
-# %% 
+# %%
 
 #Define sample points 
 X = np.random.random(100)

@@ -76,16 +76,35 @@ qubit_2 = Qubit(
 )
 
 #%% Define the pulses at qubits 1 and 2
-drive_1 =  Drive(
-    # I = DRAG(
-    # amp = np.pi *100/ 2,
-    # center= T/2,
-    # std = T/6,
-    # l = 0.5,
-    # q = qubit_1
-    # ),
-    I = 0,
+# drive_1 =  Drive(
+#     # I = DRAG(
+#     # amp = np.pi *100/ 2,
+#     # center= T/2,
+#     # std = T/6,
+#     # l = 0.5,
+#     # q = qubit_1
+#     # ),
+#     I = 0,
 
+#     Q = Pulse(
+#     amp = np.pi *100/ 2,
+#     center= T/2,
+#     std = T/6
+# )
+# )
+
+# drive_2 =  Drive(
+#     I = 0,
+#     Q = 0
+# )
+
+
+drive_1 = Drive(
+    I = Pulse(
+    amp = np.pi *100/ 2,
+    center= T/2,
+    std = T/6
+),
     Q = Pulse(
     amp = np.pi *100/ 2,
     center= T/2,
@@ -93,10 +112,20 @@ drive_1 =  Drive(
 )
 )
 
-drive_2 =  Drive(
-    I = 0,
-    Q = 0
+drive_2 = Drive(
+    I = Pulse(
+    amp = np.pi *100/ 2,
+    center= T/2,
+    std = T/6
+),
+    Q = Pulse(
+    amp = np.pi *100/ 2,
+    center= T/2,
+    std = T/6
 )
+)
+
+
 
 #%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
 
@@ -199,7 +228,11 @@ plt.show()
 
 
 # %% QPT over unknown quantum process  ###########################
-drive_1.Q.amp = 50
+# drive_1.Q.amp = 50
+drive_1.I.amp = 7.296
+drive_2.I.amp = 15.76
+drive_1.Q.amp = 151.2
+drive_2.Q.amp = 12.61
 # drive_1.I.amp = 50
 H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
 U_psi_real = qutip.propagator(H, times)                   #List of matrices due to time dependence.
@@ -212,7 +245,7 @@ U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
 chi_real = qpt(U_rho_real, op_basis)
 
 fig = qpt_plot_combined(chi_real, op_label, r'$Actual Process$')
-plt.show()
+# plt.show()
 
 #%% iSWAP ###########################
 
@@ -238,8 +271,8 @@ U_psi_cphase = Qobj([[1, 0, 0, 0],
 U_rho_cphase = spre(U_psi_cphase) * spost(U_psi_cphase.dag())
 chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
 
-fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
-plt.show()
+# fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
+# plt.show()
 
 
 #%% X Gate  ###########################
