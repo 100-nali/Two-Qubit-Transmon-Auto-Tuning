@@ -43,7 +43,7 @@ def process_fidelity_f(chi_ideal: Qobj, chi_real: Qobj):
 
     return fidelity
 
-
+# TODO: add third level.
 def fidelity_fn_internal(**kwargs):
     I1_p = kwargs['I1_p']
     I2_p = kwargs['I2_p']
@@ -51,15 +51,15 @@ def fidelity_fn_internal(**kwargs):
     Q2_p = kwargs['Q2_p']
 
     #Define number of energy levels
-    dim:int         = 2
+    dim:int  = 3
 
     #Define time-stamps
-    nT:int          = 100                                 #Number of time steps to propagate over
+    nT:int   = 100                                 #Number of time steps to propagate over
     tmeas = 64
     times = np.linspace(0,tmeas,nT)
 
     #Define inter-qubit coupling strength
-    g: float        = 0.005 * 2 * np.pi
+    g: float = 0.005 * 2 * np.pi
 
     # %% Define a Gaussian Pulse class
     class Pulse:
@@ -164,25 +164,40 @@ def fidelity_fn_internal(**kwargs):
     n1 = a1.dag() * a1
     n2 = a2.dag() * a2
 
-    #Define op_basis
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    #Define op_basis TODO: read on Gell-Mann matrices
+    I = basis(3,0)*basis(3,0).dag() + basis(3,1)*basis(3,1).dag()
+
+    sigma_x = basis(3,0)*basis(3,1).dag() + basis(3,1)*basis(3,0).dag()
+    sigma_y = -1j*basis(3,0)*basis(3,1).dag() + 1j*basis(3,1)*basis(3,0).dag()
+    sigma_z = basis(3,0)*basis(3,0).dag() - basis(3,1)*basis(3,1).dag()
+
+    l4 = Qobj([[0,0,1],[0,0,0],[1,0,0]])
+    l5 = Qobj([[0,0,-1j],[0,0,0],[1j,0,0]])
+    l6 = Qobj([[0,0,0],[0,0,1],[0,1,0]])
+    l7 = Qobj([[0,0,0],[0,0,-1j],[0,1j,0]])
+    l8 =  Qobj([[1/np.sqrt(3),0,0],[0,1/np.sqrt(3),0],[0,0,-2/np.sqrt(3)]])
+
+    testing = Qobj([[1,0,0],[0,1,0],[0,0,1]])
+
+    # op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
+    op_basis = [[sigma_x, sigma_y, sigma_z, l4, l5, l6, l7, l8, testing]]*2
 
     #Define plot labels
-    op_label = [["i", "x", "y", "z"]] * 2
+    # op_label = [["i", "x", "y", "z"]] * 2
 
-    #Define sigma matrices for the qubits
-    sigma_x1 = tensor(sigmax(), qeye(2))
-    sigma_y1 = tensor(sigmay(), qeye(2))
-    sigma_z1 = tensor(sigmaz(), qeye(2))
+    #Define sigma matrices for the qubits TODO: change to 3 dim
+    sigma_x1 = tensor(sigma_x, I)
+    sigma_y1 = tensor(sigma_y, I)
+    sigma_z1 = tensor(sigma_z, I)
 
-    sigma_x2 = tensor(qeye(2), sigmax())
-    sigma_y2 = tensor(qeye(2), sigmay())
-    sigma_z2 = tensor(qeye(2), sigmaz())
+    sigma_x2 = tensor(I, sigma_x)
+    sigma_y2 = tensor(I, sigma_y)
+    sigma_z2 = tensor(I, sigma_z)
 
-    II       = tensor(qeye(2), qeye(2))
-    XX       = tensor(sigmax(), sigmax())
-    YY       = tensor(sigmay(), sigmay())
-    ZZ       = tensor(sigmaz(), sigmaz())
+    II       = tensor(I,I)
+    XX       = tensor(sigma_x, sigma_x)
+    YY       = tensor(sigma_y, sigma_y)
+    ZZ       = tensor(sigma_z, sigma_z)
 
     # %% QPT over unknown quantum process  ###########################
     H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
@@ -196,9 +211,13 @@ def fidelity_fn_internal(**kwargs):
 
 #%% Single Qubit: X Gate  ###########################
 def fidelity_X(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
-    U_psi_X = tensor(sigmax(),qeye(2))
+    U_psi_X = tensor(sigma_x, I)
     U_rho_X = spre(U_psi_X) * spost(U_psi_X.dag())
     chi_ideal_X = qpt(U_rho_X, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
@@ -210,9 +229,13 @@ def fidelity_X(**kwargs):
 #%% Single Qubit: Y Gate
 
 def fidelity_Y(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
-    U_psi_Y = tensor(sigmay(), qeye(2))
+    U_psi_Y = tensor(sigma_y, I)
     U_rho_Y = spre(U_psi_Y) * spost(U_psi_Y.dag())
     chi_ideal_Y = qpt(U_rho_Y, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
@@ -225,8 +248,13 @@ def fidelity_Y(**kwargs):
 #%% Single Qubit: Y pi/2
 
 def fidelity_Y_90(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
+    #TODO: change to 3 dim
     U_psi_Y_90 = tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2)],[-1/np.sqrt(2), 1/np.sqrt(2)]]), qeye(2))
     U_rho_Y_90 = spre(U_psi_Y_90) * spost(U_psi_Y_90.dag())
     chi_ideal_Y_90 = qpt(U_rho_Y_90, op_basis)
@@ -239,8 +267,13 @@ def fidelity_Y_90(**kwargs):
 #%% Single Qubit: Hadamard
 
 def fidelity_H(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
+    # TODO: change to 3 dim
     U_psi_H = tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2)],[1/np.sqrt(2), -1/np.sqrt(2)]]), qeye(2))
     U_rho_H = spre(U_psi_H) * spost(U_psi_H.dag())
     chi_ideal_H = qpt(U_rho_H, op_basis)
@@ -252,7 +285,11 @@ def fidelity_H(**kwargs):
 
 #%% iSWAP Gate
 def fidelity_iSWAP(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
     U_psi_SWAP = Qobj([[1, 0, 0, 0],
                        [0, 0, 1, 0],
@@ -275,7 +312,11 @@ def fidelity_iSWAP(**kwargs):
 
 #%% CZ Gate
 def fidelity_CZ(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
     U_psi_CNOT = Qobj([[1, 0, 0, 0],
                         [0, 1, 0, 0],
@@ -293,7 +334,11 @@ def fidelity_CZ(**kwargs):
 
 #%% CNOT Gate
 def fidelity_CNOT(**kwargs):
-    op_basis = [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
+    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
 
     U_psi_CNOT = Qobj([[1, 0, 0, 0],
                         [0, 1, 0, 0],
