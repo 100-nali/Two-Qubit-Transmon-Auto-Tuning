@@ -72,7 +72,7 @@ def fidelity_fn_internal(dim=3, **kwargs):
     Q2_p = kwargs['Q2_p']
 
     #Define time-stamps
-    nT:int   = 100                                 #Number of time steps to propagate over
+    nT:int = 100                                 #Number of time steps to propagate over
     tmeas = 64
     times = np.linspace(0,tmeas,nT)
 
@@ -133,7 +133,6 @@ def fidelity_fn_internal(dim=3, **kwargs):
     )
 
     #%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
-
     def create_H(qubits, drives):
         q1, q2 = qubits
         d1, d2 = drives
@@ -145,6 +144,8 @@ def fidelity_fn_internal(dim=3, **kwargs):
 
         #Autonomous
         H_0 = Delta_1 * n1 + Delta_2 * n2
+        if dim == 3:
+            H_0 += 0.5 * ( (q1.a_q * a1.dag() * a1.dag() * a1 * a1) + (q2.a_q * a2.dag() * a2.dag() * a2 * a2) )
 
         #Drive terms
         if type(d1.I) != float:
