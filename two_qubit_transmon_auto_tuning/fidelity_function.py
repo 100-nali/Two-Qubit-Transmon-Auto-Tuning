@@ -43,15 +43,33 @@ def process_fidelity_f(chi_ideal: Qobj, chi_real: Qobj):
 
     return fidelity
 
-# TODO: add third level.
-def fidelity_fn_internal(**kwargs):
+#TODO: define op_basis function
+def operational_basis(dim):
+    if dim == 2:
+        return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]
+    if dim == 3:
+        I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+
+        sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+        sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+        sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+
+        l4 = Qobj([[0, 0, 1], [0, 0, 0], [1, 0, 0]])
+        l5 = Qobj([[0, 0, -1j], [0, 0, 0], [1j, 0, 0]])
+        l6 = Qobj([[0, 0, 0], [0, 0, 1], [0, 1, 0]])
+        l7 = Qobj([[0, 0, 0], [0, 0, -1j], [0, 1j, 0]])
+        l8 = Qobj([[1 / np.sqrt(3), 0, 0], [0, 1 / np.sqrt(3), 0], [0, 0, -2 / np.sqrt(3)]])
+
+        testing = Qobj([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+
+        # op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
+        return [[sigma_x, sigma_y, sigma_z, l4, l5, l6, l7, l8, testing]] * 2
+
+def fidelity_fn_internal(dim=3, **kwargs):
     I1_p = kwargs['I1_p']
     I2_p = kwargs['I2_p']
     Q1_p = kwargs['Q1_p']
     Q2_p = kwargs['Q2_p']
-
-    #Define number of energy levels
-    dim:int  = 3
 
     #Define time-stamps
     nT:int   = 100                                 #Number of time steps to propagate over
@@ -164,40 +182,8 @@ def fidelity_fn_internal(**kwargs):
     n1 = a1.dag() * a1
     n2 = a2.dag() * a2
 
-    #Define op_basis TODO: read on Gell-Mann matrices
-    I = basis(3,0)*basis(3,0).dag() + basis(3,1)*basis(3,1).dag()
-
-    sigma_x = basis(3,0)*basis(3,1).dag() + basis(3,1)*basis(3,0).dag()
-    sigma_y = -1j*basis(3,0)*basis(3,1).dag() + 1j*basis(3,1)*basis(3,0).dag()
-    sigma_z = basis(3,0)*basis(3,0).dag() - basis(3,1)*basis(3,1).dag()
-
-    l4 = Qobj([[0,0,1],[0,0,0],[1,0,0]])
-    l5 = Qobj([[0,0,-1j],[0,0,0],[1j,0,0]])
-    l6 = Qobj([[0,0,0],[0,0,1],[0,1,0]])
-    l7 = Qobj([[0,0,0],[0,0,-1j],[0,1j,0]])
-    l8 =  Qobj([[1/np.sqrt(3),0,0],[0,1/np.sqrt(3),0],[0,0,-2/np.sqrt(3)]])
-
-    testing = Qobj([[1,0,0],[0,1,0],[0,0,1]])
-
-    # op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
-    op_basis = [[sigma_x, sigma_y, sigma_z, l4, l5, l6, l7, l8, testing]]*2
-
-    #Define plot labels
-    # op_label = [["i", "x", "y", "z"]] * 2
-
-    #Define sigma matrices for the qubits TODO: change to 3 dim
-    sigma_x1 = tensor(sigma_x, I)
-    sigma_y1 = tensor(sigma_y, I)
-    sigma_z1 = tensor(sigma_z, I)
-
-    sigma_x2 = tensor(I, sigma_x)
-    sigma_y2 = tensor(I, sigma_y)
-    sigma_z2 = tensor(I, sigma_z)
-
-    II       = tensor(I,I)
-    XX       = tensor(sigma_x, sigma_x)
-    YY       = tensor(sigma_y, sigma_y)
-    ZZ       = tensor(sigma_z, sigma_z)
+    #Define op_basis
+    op_basis = operational_basis(dim)
 
     # %% QPT over unknown quantum process  ###########################
     H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
@@ -210,14 +196,10 @@ def fidelity_fn_internal(**kwargs):
 
 
 #%% Single Qubit: X Gate  ###########################
-def fidelity_X(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+def fidelity_X(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
     sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
-
-    U_psi_X = tensor(sigma_x, I)
+    U_psi_X = tensor(sigma_x, qeye(3))
     U_rho_X = spre(U_psi_X) * spost(U_psi_X.dag())
     chi_ideal_X = qpt(U_rho_X, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
@@ -228,14 +210,10 @@ def fidelity_X(**kwargs):
 
 #%% Single Qubit: Y Gate
 
-def fidelity_Y(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
-    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+def fidelity_Y(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
     sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
-
-    U_psi_Y = tensor(sigma_y, I)
+    U_psi_Y = tensor(sigma_y, qeye(3))
     U_rho_Y = spre(U_psi_Y) * spost(U_psi_Y.dag())
     chi_ideal_Y = qpt(U_rho_Y, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
@@ -247,15 +225,14 @@ def fidelity_Y(**kwargs):
 
 #%% Single Qubit: Y pi/2
 
-def fidelity_Y_90(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
-    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
+def fidelity_Y_90(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
+    if kwargs['dim'] == 2:
+        U_psi_Y_90 = tensor(
+            Qobj([[1 / np.sqrt(2), 1 / np.sqrt(2)], [-1 / np.sqrt(2), 1 / np.sqrt(2)]]), qeye(2))
+    if kwargs['dim'] == 3:
+        U_psi_Y_90 = tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2),0],[-1/np.sqrt(2), 1/np.sqrt(2),0], [0,0,0]]), qeye(3))
 
-    #TODO: change to 3 dim
-    U_psi_Y_90 = tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2)],[-1/np.sqrt(2), 1/np.sqrt(2)]]), qeye(2))
     U_rho_Y_90 = spre(U_psi_Y_90) * spost(U_psi_Y_90.dag())
     chi_ideal_Y_90 = qpt(U_rho_Y_90, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
@@ -266,15 +243,13 @@ def fidelity_Y_90(**kwargs):
 
 #%% Single Qubit: Hadamard
 
-def fidelity_H(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
-    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
+def fidelity_H(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
 
-    # TODO: change to 3 dim
-    U_psi_H = tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2)],[1/np.sqrt(2), -1/np.sqrt(2)]]), qeye(2))
+    if kwargs['dim'] == 2:
+        U_psi_H =  tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2)],[1/np.sqrt(2), -1/np.sqrt(2)]]), qeye(2))
+    if kwargs['dim'] == 3:
+        U_psi_H = tensor(Qobj([[1/np.sqrt(2),1/np.sqrt(2),0],[1/np.sqrt(2), -1/np.sqrt(2),0],[0,0,0]]), qeye(3))
     U_rho_H = spre(U_psi_H) * spost(U_psi_H.dag())
     chi_ideal_H = qpt(U_rho_H, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
@@ -284,12 +259,8 @@ def fidelity_H(**kwargs):
     return fidelity
 
 #%% iSWAP Gate
-def fidelity_iSWAP(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
-    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
+def fidelity_iSWAP(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
 
     U_psi_SWAP = Qobj([[1, 0, 0, 0],
                        [0, 0, 1, 0],
@@ -301,45 +272,38 @@ def fidelity_iSWAP(**kwargs):
                         [0, 1, 1j, 0],
                         [0, 0, 0, 1]])
 
-    U_psi_CNOT = U_psi_SWAP * U_psi_i
-    U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
-    chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
+    U_psi_iSWAP = U_psi_SWAP * U_psi_i
+    U_rho_iSWAP = spre(U_psi_iSWAP) * spost(U_psi_iSWAP.dag())
+    chi_ideal_iSWAP = qpt(U_rho_iSWAP, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
 
     # Evaluate process fidelity
-    fidelity = process_fidelity_paper(Qobj(chi_ideal_CNOT), Qobj(chi_real))
+    fidelity = process_fidelity_paper(Qobj(chi_ideal_iSWAP), Qobj(chi_real))
     return fidelity
 
 #%% CZ Gate
-def fidelity_CZ(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
-    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
-
-    U_psi_CNOT = Qobj([[1, 0, 0, 0],
+def fidelity_CZ(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
+    #TODO: change to 3 dim!
+    U_psi_CZ = Qobj([[1, 0, 0, 0],
                         [0, 1, 0, 0],
                         [0, 0, 1, 0],
                         [0, 0, 0, -1]])
-    U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
-    chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
+    U_rho_CZ = spre(U_psi_CZ) * spost(U_psi_CZ.dag())
+    chi_ideal_CZ = qpt(U_rho_CZ, op_basis)
     chi_real = fidelity_fn_internal(**kwargs)
 
     # Evaluate process fidelity
-    fidelity = process_fidelity_paper(Qobj(chi_ideal_CNOT), Qobj(chi_real))
+    fidelity = process_fidelity_paper(Qobj(chi_ideal_CZ), Qobj(chi_real))
     return fidelity
 
 
 
 #%% CNOT Gate
-def fidelity_CNOT(**kwargs):
-    I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
-    sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
-    sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
-    sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-    op_basis = [[I, sigma_x, sigma_y, sigma_z]] * 2
+def fidelity_CNOT(dim = 3, **kwargs):
+    op_basis = operational_basis(dim)
 
+    #TODO: change to 3dim
     U_psi_CNOT = Qobj([[1, 0, 0, 0],
                         [0, 1, 0, 0],
                         [0, 0, 0, 1],
@@ -350,5 +314,4 @@ def fidelity_CNOT(**kwargs):
 
     #Evaluate process fidelity
     fidelity = process_fidelity_paper(Qobj(chi_ideal_CNOT), Qobj(chi_real))
-    print('CNOT Process Fidelity at T = ', fidelity)
     return fidelity
