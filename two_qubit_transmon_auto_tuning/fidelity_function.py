@@ -110,7 +110,7 @@ def fidelity_fn_internal(dim=3, **kwargs):
     #Define op_basis
     op_basis = operational_basis(dim-1)
 
-    #%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
+    #%% Define Hamiltonian of 2-qubit system
     def create_H(qubits, drives):
         q1, q2 = qubits
         d1, d2 = drives
@@ -121,9 +121,27 @@ def fidelity_fn_internal(dim=3, **kwargs):
         delta = q1.w_q - q2.w_q
 
         #Autonomous
-        H_0 = Delta_1 * n1 + Delta_2 * n2
+        if type(q1.w_q)!= float:
+            H_01 = [n1,q1.w_q]
+        else:
+            H_01 = n1*q1.w_q
+        if type(q2.w_q)!= float:
+            H_02 = [n2,q2.w_q]
+        else:
+            H_02 = n2*q2.w_q
+        if type(q1.w_d)!= float:
+            H_0d1 = [-n1, q1.w_d]
+        else:
+            H_0d1 = -n1*q1.w_d
+        if type(q2.w_d)!= float:
+            H_0d2 = [-n2, q2.w_d]
+        else:
+            H_0d2 = -n2*q2.w_d
+
         if dim == 3:
-            H_0 += 0.5 * ( (q1.a_q * a1.dag() * a1.dag() * a1 * a1) + (q2.a_q * a2.dag() * a2.dag() * a2 * a2) )
+            H_0 = 0.5 * ( (q1.a_q * a1.dag() * a1.dag() * a1 * a1) + (q2.a_q * a2.dag() * a2.dag() * a2 * a2) )
+        else:
+            H_0 = np.zeros(n1.shape)
 
         #Drive terms
         if type(d1.I) != float:
@@ -150,7 +168,7 @@ def fidelity_fn_internal(dim=3, **kwargs):
         H_d2_1 = [g*a1.dag()*a2, lambda t, *args: np.exp(1j*delta*t)]
 
         #Total H
-        H = [H_0, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
+        H = [H_0, H_01, H_02, H_0d1, H_0d2, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
         return H
 
 
