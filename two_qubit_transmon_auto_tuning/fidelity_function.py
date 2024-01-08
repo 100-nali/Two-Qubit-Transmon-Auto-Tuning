@@ -11,49 +11,16 @@ def process_fidelity_paper(chi_ideal: Qobj, chi_real: Qobj):
         fid = ((chi_ideal * chi_real).tr()).real
         return fid
 
-def process_fidelity_t(chi_ideal: Qobj, chi_real: Qobj):
- # Calculate the square root of the ideal process matrix
-    sqrt_chi_ideal = chi_ideal.sqrtm()
-
-    # Calculate the matrix square root of sqrt_chi_ideal * chi_real * sqrt_chi_ideal
-    sqrt_term = sqrt_chi_ideal * chi_real * sqrt_chi_ideal
-
-    # Calculate the trace of the square root term
-    trace_sqrt_term = sqrt_term.tr()
-
-    # Calculate the process fidelity using the formula
-    fidelity = (np.abs(trace_sqrt_term) ** 2).real
-    return fidelity
-
-
-def process_fidelity_f(chi_ideal: Qobj, chi_real: Qobj):
- # Calculate the square root of the ideal process matrix
-    sqrt_chi_ideal = chi_ideal.sqrtm()
-
-    # Calculate the matrix square root of sqrt_chi_ideal * chi_real * sqrt_chi_ideal
-    sqrt_term = sqrt_chi_ideal * chi_real
-
-    # Calculate the trace of the square root term
-    another_sqrt = sqrt_term.sqrtm()
-
-    trace_sqrt_term = another_sqrt.tr()
-
-    # Calculate the process fidelity using the formula
-    fidelity = (np.abs(trace_sqrt_term) ** 2)
-
-    return fidelity
-
 #TODO: define op_basis function
 def operational_basis(dim):
     if dim == 2:
-        return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]
+        return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
     if dim == 3:
         I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
 
         sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
         sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
         sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-
         l4 = Qobj([[0, 0, 1], [0, 0, 0], [1, 0, 0]])
         l5 = Qobj([[0, 0, -1j], [0, 0, 0], [1j, 0, 0]])
         l6 = Qobj([[0, 0, 0], [0, 0, 1], [0, 1, 0]])
@@ -132,6 +99,17 @@ def fidelity_fn_internal(dim=3, **kwargs):
         w_d = 6 * 2 * np.pi
     )
 
+    # %% Define a1, a2
+    a1 = tensor(destroy(dim), qeye(dim))
+    a2 = tensor(qeye(dim), destroy(dim))
+
+    #Define n1 and n2
+    n1 = a1.dag() * a1
+    n2 = a2.dag() * a2
+
+    #Define op_basis
+    op_basis = operational_basis(dim-1)
+
     #%% Define Hamiltonian of 2-qubit system - Obtained from Barnaby's Notes
     def create_H(qubits, drives):
         q1, q2 = qubits
@@ -175,23 +153,15 @@ def fidelity_fn_internal(dim=3, **kwargs):
         H = [H_0, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
         return H
 
-    # %% Define a1, a2
-    a1 = tensor(destroy(dim), qeye(dim))
-    a2 = tensor(qeye(dim), destroy(dim))
 
-    #Define n1 and n2
-    n1 = a1.dag() * a1
-    n2 = a2.dag() * a2
-
-    #Define op_basis
-    op_basis = operational_basis(dim)
 
     # %% QPT over unknown quantum process  ###########################
     H = create_H([qubit_1, qubit_2], [drive_1, drive_2])
     U_psi_real = qutip.propagator(H, times)                   #List of matrices due to time dependence.
     U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
     U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
-    chi_real = qpt(U_rho_real, op_basis)
+    U_rho_real = Qobj(U_rho_real[0:16, 0:16])
+    chi_real = qpt(Qobj(U_rho_real), op_basis)
 
     return chi_real
 
@@ -211,7 +181,7 @@ def fidelity_X(dim = 3, **kwargs):
 
 #%% Single Qubit: Y Gate
 
-def fidelity_Y(dim = 3, **kwargs):
+def fidelity_Y(dim = 2, **kwargs):
     op_basis = operational_basis(dim)
     sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
     U_psi_Y = tensor(sigma_y, qeye(3))
@@ -226,7 +196,7 @@ def fidelity_Y(dim = 3, **kwargs):
 
 #%% Single Qubit: Y pi/2
 
-def fidelity_Y_90(dim = 3, **kwargs):
+def fidelity_Y_90(dim = 2, **kwargs):
     op_basis = operational_basis(dim)
     if kwargs['dim'] == 2:
         U_psi_Y_90 = tensor(
@@ -244,7 +214,7 @@ def fidelity_Y_90(dim = 3, **kwargs):
 
 #%% Single Qubit: Hadamard
 
-def fidelity_H(dim = 3, **kwargs):
+def fidelity_H(dim = 2, **kwargs):
     op_basis = operational_basis(dim)
 
     if kwargs['dim'] == 2:
@@ -260,7 +230,7 @@ def fidelity_H(dim = 3, **kwargs):
     return fidelity
 
 #%% iSWAP Gate
-def fidelity_iSWAP(dim = 3, **kwargs):
+def fidelity_iSWAP(dim = 2, **kwargs):
     op_basis = operational_basis(dim)
 
     U_psi_SWAP = Qobj([[1, 0, 0, 0],
@@ -283,7 +253,7 @@ def fidelity_iSWAP(dim = 3, **kwargs):
     return fidelity
 
 #%% CZ Gate
-def fidelity_CZ(dim = 3, **kwargs):
+def fidelity_CZ(dim = 2, **kwargs):
     op_basis = operational_basis(dim)
     #TODO: change to 3 dim!
     U_psi_CZ = Qobj([[1, 0, 0, 0],
@@ -301,7 +271,7 @@ def fidelity_CZ(dim = 3, **kwargs):
 
 
 #%% CNOT Gate
-def fidelity_CNOT(dim = 3, **kwargs):
+def fidelity_CNOT(dim = 2, **kwargs):
     op_basis = operational_basis(dim)
 
     #TODO: change to 3dim
