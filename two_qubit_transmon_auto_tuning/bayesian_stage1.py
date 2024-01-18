@@ -27,7 +27,7 @@ iterations = 300
 init_points = 300
 
 #%% Define objective function -> gate fidelity as a function of the drives.
-objective = fid.fidelity_iSWAP
+objective = fid.fidelity_CNOT
 
 #%% Bayesian Optimization
 
@@ -36,7 +36,17 @@ these bounds here are for the case that nothing is known about what the gate
 should look like. However, maybe prior knowledge can be taken about
 gate amplitudes (in an ideal case), and bounds taken around that.
 """""
-pbounds = {'I1_p': (0, 100), 'Q1_p': (0, 100), 'I2_p': (0, 100), 'Q2_p': (0, 100)}
+
+"""""
+TODO:
+allow GRAPE pulses to be inputted
+figure out why/how w_q becomes a function of either bayes_opt or time
+try iswap 
+try cphase
+"""""
+
+
+pbounds = {'I1_p': (30, 50), 'Q1_p': (50, 100), 'I2_p': (30, 50), 'Q2_p': (30, 50)}
 
 optimizer = BayesianOptimization(
     f=objective,
@@ -47,11 +57,6 @@ optimizer = BayesianOptimization(
 # Step 4: Access the scores and iteration index
 iteration_index = []
 scores = []
-
-# optimizer.probe(
-#     params = {'I1_p': 78, 'Q1_p': 0, 'I2_p': 0, 'Q2_p': 0},
-#     lazy = True
-#     )
 
 optimizer.maximize(
     init_points=init_points, #300 was better for both of these
