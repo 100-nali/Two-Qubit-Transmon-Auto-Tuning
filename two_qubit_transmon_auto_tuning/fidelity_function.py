@@ -159,6 +159,10 @@ def fidelity_fn_internal(**kwargs):
     # %% QPT over unknown quantum process  ###########################
 
     #TODO: introduce a loop to change values of wq of qubits.
+    """
+    'intermediate' U should now be evaluated per time interval, and an overall U developed as a product of these.
+    """
+
     H = create_H([qubit_1, qubit_2], [drive_1, drive_2], g)
     U_psi_real = qutip.propagator(H, times)                   #List of matrices due to time dependence.
     U_psi_real_T = U_psi_real[nT-1]                           #Take entry from last time step
