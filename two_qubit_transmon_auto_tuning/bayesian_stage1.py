@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 # from sklearn.gaussian_process.kernels import RBF
 from bayes_opt import BayesianOptimization
 from bayes_opt.util import UtilityFunction
-import fidelity_function as fid
+from fidelity_function import *
 from bayes_opt.event import Events, DEFAULT_EVENTS
 
 
@@ -20,14 +20,37 @@ i.e., total number of parameters to optimize over = 4.
 
 """
 
-# #%% Define seed
-# np.random.seed(10)
+#%% Define parameters
+exp = Experiment(
+    [Qubit(
+    i = 1,
+    w_q = 5 * 2 * np.pi,
+    a_q = -0.3 * 2 * np.pi,
+    r = 0.01 * 2 * np.pi,
+    w_d = 5 * 2 * np.pi),
+
+    Qubit(
+    i = 2,
+    w_q = 6 * 2 * np.pi,
+    a_q = -0.3 * 2 * np.pi,
+    r = 0.01 * 2 * np.pi,
+    w_d = 6 * 2 * np.pi)],
+
+    g = 0.005 * 2 * np.pi,
+
+    t_exp = 100,
+
+    gate_type = 'CPhase',
+
+    drive_shape = 'Gaussian')
+
+#%% Define Bayes opt parameters
 
 iterations = 300
 init_points = 300
 
 #%% Define objective function -> gate fidelity as a function of the drives.
-objective = fid.fidelity_CNOT
+objective = exp.fidelity_CNOT
 
 #%% Bayesian Optimization
 
@@ -37,16 +60,24 @@ should look like. However, maybe prior knowledge can be taken about
 gate amplitudes (in an ideal case), and bounds taken around that.
 """""
 
-"""""
-TODO:
-allow GRAPE pulses to be inputted
-figure out why/how w_q becomes a function of either bayes_opt or time
-try iswap 
-try cphase
-"""""
 
+pbounds = {'I1_p':
+               { 'amp': (0,50),
+                'center': exp.t_exp/2,
+                'std': exp.t_exp/6},
+           'Q1_p':
+               {'amp': (0,50),
+                'center': exp.t_exp/2,
+                'std': exp.t_exp/6},
+           'I2_p':
+               { 'amp': (0,50),
+                'center': exp.t_exp/2,
+                'std':exp.t_exp/6},
+           'Q2_p':
+               { 'amp': (0,50),
+                'center': exp.t_exp/2,
+                'std': exp.t_exp/6}}
 
-pbounds = {'I1_p': (30, 50), 'Q1_p': (50, 100), 'I2_p': (30, 50), 'Q2_p': (30, 50)}
 
 optimizer = BayesianOptimization(
     f=objective,
