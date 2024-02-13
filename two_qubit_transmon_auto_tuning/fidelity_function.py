@@ -9,11 +9,8 @@ from functools import partial
 
 def operational_basis(dim):
     if dim == 2:
-        return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
-    if dim == 3:
-        return [[qeye(3), qeye(3), qeye(3), qeye(3), qeye(3), qeye(3), qeye(3), qeye(3), qeye(3)]] * 2
-
-
+        return [[(sigmax()+ sigmay()), (sigmax()- sigmay()), (qeye(2)+sigmaz()), (qeye(2)-sigmaz())]]*2
+        # return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
 # %%  Define global variables (constants)
 # Define dim
 dim = 3
@@ -241,15 +238,17 @@ class Experiment:
 #%%
         U_psi_real_T = U_psi_real[nT - 1]
 
+
         rows = [0,1,3,4]
         cols = [0,1,3,4]
 
         U_psi_real_T = Qobj(U_psi_real_T[rows][:,cols])
         U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
         U_rho_real = Qobj(U_rho_real)
+
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
-        return chi_real
+        return chi_real*16 # the *16 term comes from the newly defined op_basis
 
     def Cphase(self):
         exp = self
