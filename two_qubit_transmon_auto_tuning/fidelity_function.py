@@ -77,35 +77,49 @@ class LowPassStepValue:
         return (self.value - self.default_value) * (1 - np.exp(
             -(t - self.step_time) / self.tau)) + self.default_value if t > self.step_time else self.default_value
 
-## Redefine this class.
-# class Linear:
-#     def __init__(self, slope, start_time, stop_value, default_value=0, current_value=0):
-#         self.slope = slope
-#         self.start_time = start_time
-#         self.stop_value = stop_value
-#         self.default_value = default_value
-#         self.current_value = current_value
-#
-#     def store_last(self, current_value):
-#         self.current_value = current_value
-#     def __call__(self, t, *args, **kwargs):
-#         next_value = self.slope*(t-self.start_time) if t > self.start_time and self.current_value < self.stop_value else self.default_value
-#         if self.current_value == self.stop_value:
-#             next_value = self.stop_value
-#         self.store_last(next_value)
-#         return next_value
-
 
 class Linear:
-    def __init__(self, m, t0, t_stop):
-        self.m = m
+    def __init__(self, t0, y0, t_stop, y_stop ):
         self.t0 = t0
+        self.y0 = y0
         self.t_stop = t_stop
+        self.y_stop = y_stop
 
     def __call__(self, t, *args, **kwargs):
         if t <= self.t_stop:
-            y = self.m*(t-self.t0)
+            m = (self.y_stop - self.y0)/(self.t_stop - self.t0)
+            b = self.y0 - m*self.t0
+            y = m*t + b
             return y
+
+# %% Define the piecewise linear pulse class
+
+class LinearFluxTuning:
+    def __init__(self, t0, y0, t_tune, y_max, tau):
+        self.t0 = t0
+        self.y0 = y0
+        self.t1 = t0 + t_tune
+        self.t2 = t0 + t_tune + tau
+        self.t_stop = t0 + 2*t_tune + tau
+        self.y_max = y_max
+
+    def __call__(self, t, *args, **kwargs):
+        if t < self.t1:
+            m = (self.y_max - self.y0)/(self.t1 - self.t0)
+            b = self.y0 - m*self.t0
+
+        elif t>= self.t1 and t < self.t2:
+            m = 0
+            b = self.y_max
+
+        elif t>= self.t2 and t< self.t_stop:
+            m = -(self.y_max - self.y0)/(self.t_stop - self.t2)
+            b = self.y_max - m*self.t2
+        else:
+            m = 0
+            b = self.y0
+        y = m*t + b
+        return y
 
 # %% Define a Drive class
 class Drive:
@@ -115,12 +129,14 @@ class Drive:
 
 #%%
 class Qubit:
-    def __init__(self, i, w_q, a_q, r, w_d):
+    def __init__(self, i, w_q, a_q, r, w_d, w_ex12):
         self.i = i              #index
         self.w_q = w_q          #qubit freq
+        self.w_q_def = w_q      #default qubit frequency
         self.a_q = a_q          #anharmonicity
         self.r = r              #drive coupling
         self.w_d = w_d          #drive freq
+        self.w_ex12 = w_ex12    # |11> and |20> exchange oscillation freq
 
     def set_wq(self, wq_update):
         self.w_q = wq_update
@@ -139,6 +155,10 @@ class Experiment:
         g = self.g
         q1, q2 = qubits
         d1, d2 = drives
+
+        w1_set = self.Cphase()  # if cphase on, should set wq1 as a function based on where t lies in the interval.
+        if self.gate_type == 'Cphase':
+            q1.set_wq(w1_set)
         # Autonomous
         if type(q1.w_q) != float:
             H_01 = [n1, q1.w_q]
@@ -213,19 +233,12 @@ class Experiment:
         )
 
         drives = [drive_1, drive_2]
-
-        wq1 = 5.30 * 2 * np.pi  # exchange oscillations for these parameters occur at this freq.
-        on_Cphase = False
-        if self.gate_type == 'Cphase':
-            on_Cphase = True
-
-        qubits = CPhase(on_Cphase, self.qubits, wq1)
-        qubit_1, qubit_2 = qubits
-
-        nT: int = 100
+#%%
+        nT: int = 99
         times = np.linspace(0, self.t_exp, nT)
-        H = self.create_H(drives)  # drives will change to piecewise constant
+        H = self.create_H(drives) #lambda function of time.
         U_psi_real = qutip.propagator(H, times)
+#%%
         U_psi_real_T = U_psi_real[nT - 1]
 
         rows = [0,1,3,4]
@@ -238,6 +251,26 @@ class Experiment:
 
         return chi_real
 
+    def Cphase(self):
+        exp = self
+        on = exp.gate_type == 'Cphase'
+        q1, q2 = exp.qubits
+        t0 = 0
+        t_tune = exp.t_exp / 3
+        tau = exp.t_exp / 3
+        y0 = q1.w_q_def
+        y_max = q1.w_ex12
+
+        if on == True:
+            w1_set = LinearFluxTuning(
+                t0 = t0,
+                t_tune = t_tune,
+                y0 = y0,
+                y_max = y_max,
+                tau = tau
+            )
+            return w1_set
+#%%
     def fidelity_CNOT(self, **kwargs):
         U_psi_CNOT = Qobj([[1, 0, 0, 0],
                            [0, 1, 0, 0],
@@ -249,6 +282,19 @@ class Experiment:
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_CNOT), Qobj(chi_real))
+        return fidelity
+
+    def fidelity_Cphase(self, **kwargs):
+        U_psi_Cphase = Qobj([[1, 0, 0, 0],
+                           [0, 1, 0, 0],
+                           [0, 0, 1, 0],
+                           [0, 0, 0, -1]])
+        U_rho_Cphase = spre(U_psi_Cphase) * spost(U_psi_Cphase.dag())
+        chi_ideal_Cphase = qpt(U_rho_Cphase, op_basis)
+        chi_real = self.simulate_qpt(**kwargs)
+
+        # Evaluate process fidelity
+        fidelity = process_fidelity(Qobj(chi_ideal_Cphase), Qobj(chi_real))
         return fidelity
 
     def fidelity_X(self,**kwargs):
@@ -324,21 +370,6 @@ class Experiment:
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_CZ), Qobj(chi_real))
         return fidelity
-
-
-#%% %%%%%%%%%%%%%%%%%%%%%%%%%
-#%% TODO: change this (implement cphase fr).
-def CPhase(on:bool, qubits, wq1):
-    qubit_1,qubit_2 = qubits
-    if on == True:
-        #### Make wq1 set to a linear ramp!!
-        # wq1 = LowPassStepValue(
-        #     value=wq1,
-        #     step_time=0,
-        #     tau=8,
-        #     default_value=qubit_1.w_q)
-        qubit_1.set_wq(wq1)
-    return qubits
 
 #%%
 def process_fidelity(chi_ideal: Qobj, chi_real: Qobj):
