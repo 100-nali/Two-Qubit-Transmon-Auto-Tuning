@@ -1,16 +1,25 @@
 #Imports
 import numpy as np
 from qutip import *
+import scipy.linalg as la
 import matplotlib.pyplot as plt
 import itertools
 from dataclasses import dataclass
 import math
 from functools import partial
 
+
+"""
+TODO: figure out how to define is_11. Make some connection with the qpt code to the main function-code : is_11 is
+dependent on the op in op_basis_list.
+"""
+
 def operational_basis(dim):
     if dim == 2:
-        return [[(sigmax()+ sigmay()), (sigmax()- sigmay()), (qeye(2)+sigmaz()), (qeye(2)-sigmaz())]]*2
-        # return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
+        # return [[(sigmax()+ sigmay()), (sigmax()- sigmay()), (qeye(2)+sigmaz()), (qeye(2)-sigmaz())]]*2
+        return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
+
+
 # %%  Define global variables (constants)
 # Define dim
 dim = 3
@@ -19,11 +28,11 @@ dim = 3
 a1 = tensor(destroy(dim), qeye(dim))
 a2 = tensor(qeye(dim), destroy(dim))
 
-#Define n1 and n2
+# Define n1 and n2
 n1 = a1.dag() * a1
 n2 = a2.dag() * a2
 
-#Define op_basis
+# Define op_basis
 op_basis = operational_basis(2)
 
 #%% define universal Pulse class
@@ -45,6 +54,29 @@ class GaussianPulse(Pulse):
         return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
                 self.std * np.sqrt(2 * np.pi))
 
+# %%
+
+class DRAG(Pulse):
+    def define_pulse(self):
+        # self.Gaussian = GaussianPulse(self.params)
+        self.GaussianParams = self.params.get('GaussianParams')
+        self.lamb = self.params.get('lamb', 0.75)
+        self.alpha = self.params.get('alpha', 1)
+
+    def __call__(self, t, *args, **kwargs):
+        self.define_pulse()
+        Gaussian = GaussianPulse(t, **self.GaussianParams)
+        center = self.GaussianParams.get('center')
+        std = self.GaussianParams.get('std')
+        B_t_coeff = ((t - center)**3)/(2 * std**4)
+        A_drag = Gaussian
+        print(A_drag)
+        B_drag = (self.lamb / self.alpha) * Gaussian * B_t_coeff
+        print(B_drag)
+        # return [A_drag, B_drag]
+        return A_drag
+
+
 #%%
 class GRAPE(Pulse):
     def define_pulse(self):
@@ -55,9 +87,12 @@ class GRAPE(Pulse):
         self.define_pulse()
         return
 
+# %%
 def drive_shape(shape, tmeas, **kwargs):
     if shape == 'Gaussian':
         return GaussianPulse(tmeas, **kwargs)
+    if shape == 'DRAG':
+        return DRAG(tmeas, **kwargs)
     if shape == 'GRAPE':
         return GRAPE(tmeas, **kwargs)
 
@@ -101,14 +136,13 @@ class LinearFluxTuning:
         self.y_max = y_max
 
     def __call__(self, t, *args, **kwargs):
-        if t < self.t1:
+        if t>self.t0 and t < self.t1:
             m = (self.y_max - self.y0)/(self.t1 - self.t0)
-            b = self.y0 - m*self.t0
+            b = self.y0 + m*self.t0
 
         elif t>= self.t1 and t < self.t2:
             m = 0
             b = self.y_max
-
         elif t>= self.t2 and t< self.t_stop:
             m = -(self.y_max - self.y0)/(self.t_stop - self.t2)
             b = self.y_max - m*self.t2
@@ -116,6 +150,21 @@ class LinearFluxTuning:
             m = 0
             b = self.y0
         y = m*t + b
+        return y
+
+#%%
+class SquareFluxTuning:
+    def __init__(self, t0, y0, t_stop, y_max):
+        self.t0 = t0
+        self.y0 = y0
+        self.t_stop = t_stop
+        self.y_max = y_max
+
+    def __call__(self, t, *args, **kwargs):
+        if t> self.t0 and t< self.t_stop:
+            y = self.y_max
+        else:
+            y = self.y0
         return y
 
 # %% Define a Drive class
@@ -147,15 +196,16 @@ class Experiment:
         self.gate_type = gate_type
         self.drive_shape = drive_shape
 
-    def create_H(self, drives):
+    def create_H(self, drives, args):
         qubits = self.qubits
         g = self.g
         q1, q2 = qubits
         d1, d2 = drives
-
-        w1_set = self.Cphase()  # if cphase on, should set wq1 as a function based on where t lies in the interval.
+        #
+        w1_set = self.Cphase(args)  # if cphase on and state in |11>, should set wq1 as a function based on where t lies in the interval.
         if self.gate_type == 'Cphase':
             q1.set_wq(w1_set)
+
         # Autonomous
         if type(q1.w_q) != float:
             H_01 = [n1, q1.w_q]
@@ -165,13 +215,8 @@ class Experiment:
             H_02 = [n2, q2.w_q]
         else:
             H_02 = n2 * q2.w_q
-        if type(q1.w_d) != float:
-            H_0d1 = [-n1, q1.w_d]
-        else:
+
             H_0d1 = -n1 * q1.w_d
-        if type(q2.w_d) != float:
-            H_0d2 = [-n2, q2.w_d]
-        else:
             H_0d2 = -n2 * q2.w_d
 
         if dim == 3:
@@ -186,30 +231,72 @@ class Experiment:
             H_d1_0b = -0.5 * q1.r * 1j * (a1 - a1.dag()) * d1.I
 
         if type(d1.Q) != float:
-            H_d1_0a = [- 0.5 * q1.r * (a1 + a1.dag()), d1.Q]
+            H_d1_0a = [-0.5 * q1.r * (a1 + a1.dag()), d1.Q]
         else:
-            H_d1_0a = - 0.5 * q1.r * (a1 + a1.dag()) * d1.Q
+            H_d1_0a = -0.5 * q1.r * (a1 + a1.dag()) * d1.Q
 
         if type(d2.I) != float:
-            H_d2_0b = [1j * (a2 - a2.dag()), d2.I]
+            H_d2_0b = [-0.5*1j * q2.r * (a2 - a2.dag()), d2.I]
         else:
-            H_d2_0b = 1j * (a2 - a2.dag()) * d2.I
+            H_d2_0b = -0.5*1j * q2.r * (a2 - a2.dag()) * d2.I
 
         if type(d2.Q) != float:
-            H_d2_0a = [- 0.5 * q2.r * (a2 + a2.dag()), d2.Q]
+            H_d2_0a = [-0.5 * q2.r * (a2 + a2.dag()), d2.Q]
         else:
-            H_d2_0a = - 0.5 * q2.r * (a2 + a2.dag()) * d2.Q
+            H_d2_0a = -0.5 * q2.r * (a2 + a2.dag()) * d2.Q
+
+        delta_d = q1.w_d - q2.w_d
+        H_d1_1 = [a1 * a2.dag(), lambda t, *args: self.g * np.exp(-1j * delta_d * t)]
+        H_d2_1 = [a1.dag() * a2, lambda t, *args: self.g * np.exp(1j * delta_d * t)]
 
         # delta = q1.w_q - q2.w_q
-        if type(q1.w_q) != float:
-            H_d1_1 = [g * a1 * a2.dag(), lambda t, *args: (np.exp(-1j * (q1.w_q(t)) - q2.w_q) * t)]
-            H_d2_1 = [g * a1.dag() * a2, lambda t, *args: (np.exp(1j * (q1.w_q(t)) - q2.w_q) * t)]
-        else:
-            H_d1_1 = [g * a1 * a2.dag(), lambda t, *args: np.exp(-1j * (q1.w_q - q2.w_q) * t)]
-            H_d2_1 = [g * a1.dag() * a2, lambda t, *args: np.exp(1j * (q1.w_q - q2.w_q) * t)]
+        #%%
+        # if type(q1.w_q) != float:
+        #     H_d1_1 = [g * a1 * a2.dag(), lambda t, *args: (np.exp(-1j * (q1.w_q(t)) - q2.w_q) * t)]
+        #     H_d2_1 = [g * a1.dag() * a2, lambda t, *args: (np.exp(1j * (q1.w_q(t)) - q2.w_q) * t)]
+        # #%%
+        # else:
+        #     H_d1_1 = [g * a1 * a2.dag(), lambda t, *args: np.exp(-1j * (q1.w_q - q2.w_q) * t)]
+        #     H_d2_1 = [g * a1.dag() * a2, lambda t, *args: np.exp(1j * (q1.w_q - q2.w_q) * t)]
 
         # Total H
         H = [H_0, H_01, H_02, H_0d1, H_0d2, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
+
+        # # the qubit 1 drift hamiltonian
+        # H1 = [
+        #     (q1.a_q / 2) * (a1.dag() * a1.dag() * a1 * a1) - q1.w_d * (
+        #                 a1.dag() * a1),
+        #     [a1.dag() * a1, q1.w_q]
+        # ]
+        #
+        # # the qubit 1 drive hamiltonian
+        # H1d = [
+        #     [-q1.r * 1j * (a1 - a1.dag()) / 2., d1.I],
+        #     [-q1.r * (a1 + a1.dag()) / 2., d1.Q]
+        # ]
+        #
+        # # the qubit 2 drift hamiltonian
+        # H2 = [
+        #     (q1.a_q / 2) * (a2.dag() * a2.dag() * a2 * a2) - q2.w_d * (
+        #                 a2.dag() * a2),
+        #     [(a2.dag() * a2), q2.w_q]
+        # ]
+        #
+        # H2d = [
+        #     [-q2.r * 1j * (a2 - a2.dag()) / 2., d2.I],
+        #     [-q2.r * (a2 + a2.dag()) / 2., d2.Q]
+        # ]
+        #
+        # delta_d = q1.w_d - q2.w_d
+        #
+        # # the interaction hamiltonian
+        # H_int = [
+        #     [a1 * a2.dag(), lambda t, *args: self.g * np.exp(-1j * delta_d * t)],
+        #     [a1.dag() * a2, lambda t, *args: self.g * np.exp(1j * delta_d * t)]
+        # ]
+        #
+        # H= [*H1, *H1d, *H2, *H2d, *H_int]
+
         return H
 
     def simulate_qpt(self, **kwargs):
@@ -231,36 +318,48 @@ class Experiment:
 
         drives = [drive_1, drive_2]
 #%%
-        nT: int = 99
+        nT: int = 100
         times = np.linspace(0, self.t_exp, nT)
-        H = self.create_H(drives) #lambda function of time.
-        U_psi_real = qutip.propagator(H, times)
-#%%
-        U_psi_real_T = U_psi_real[nT - 1]
 
-
-        rows = [0,1,3,4]
-        cols = [0,1,3,4]
-
-        U_psi_real_T = Qobj(U_psi_real_T[rows][:,cols])
+        # tau_ratios = np.linspace(0,1,100)
+        tau_ratios = [0.7676767676767677]
+        U33_angles = []
+        for tau_ratio in tau_ratios:
+            H = self.create_H(drives, args = {'tau_ratio': tau_ratio, 't0': 0}) #lambda function of time.
+            U_psi_real = qutip.propagator(H, times)
+    #%%
+            np.set_printoptions(precision=1)
+            U_psi_real_T = U_psi_real[nT - 1]
+            rows = [0,1,3,4]
+            cols = [0,1,3,4]
+            U_psi_real_T = (Qobj((U_psi_real_T[rows][:,cols])))
+            phis = np.angle([ U_psi_real_T[1,1],  U_psi_real_T[2,2],  U_psi_real_T[3,3]], deg = True)
+            U33_angle = phis[2] - phis[1] - phis[0]
+            U33_angles.append(U33_angle)
+            print(U33_angle)
+        print(U33_angles)
+        # print(U_psi_real_T)
         U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
         U_rho_real = Qobj(U_rho_real)
 
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
-        return chi_real*16 # the *16 term comes from the newly defined op_basis
+        return [chi_real,U_psi_real_T]  # the *16 term comes from the newly defined op_basis
 
-    def Cphase(self):
+    def Cphase(self, args):
         exp = self
         on = exp.gate_type == 'Cphase'
         q1, q2 = exp.qubits
-        t0 = 0
-        t_tune = exp.t_exp / 3
-        tau = exp.t_exp / 3
+        t0 = args['t0']
+        tau = args['tau_ratio'] * exp.t_exp
+        t_tune = 0.5 * (exp.t_exp - tau)
+        # t0 = 0
+        # tau = 0.15 * exp.t_exp
+        # t_tune = 0.5*(1-tau)*exp.t_exp
         y0 = q1.w_q_def
         y_max = q1.w_ex12
 
-        if on == True:
+        if on is True:
             w1_set = LinearFluxTuning(
                 t0 = t0,
                 t_tune = t_tune,
@@ -268,6 +367,12 @@ class Experiment:
                 y_max = y_max,
                 tau = tau
             )
+            # w1_set = SquareFluxTuning(
+            #     t0 = t0,
+            #     y0 = y0,
+            #     t_stop =exp.t_exp,
+            #     y_max = y_max
+            # )
             return w1_set
 #%%
     def fidelity_CNOT(self, **kwargs):
@@ -290,11 +395,12 @@ class Experiment:
                            [0, 0, 0, -1]])
         U_rho_Cphase = spre(U_psi_Cphase) * spost(U_psi_Cphase.dag())
         chi_ideal_Cphase = qpt(U_rho_Cphase, op_basis)
-        chi_real = self.simulate_qpt(**kwargs)
+        vars= self.simulate_qpt(**kwargs)
+        chi_real, U = vars
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_Cphase), Qobj(chi_real))
-        return fidelity
+        return [fidelity, U]
 
     def fidelity_X(self,**kwargs):
         # sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
@@ -302,10 +408,11 @@ class Experiment:
         U_psi_X = tensor(sigmax(), qeye(2))
         U_rho_X = spre(U_psi_X) * spost(U_psi_X.dag())
         chi_ideal_X = qpt(U_rho_X, op_basis)
-        chi_real = self.simulate_qpt(**kwargs)
+        vars = self.simulate_qpt(**kwargs)
+        chi_real, U = vars
         # %% Evaluate process fidelity  ###########################
         fidelity = process_fidelity(Qobj(chi_ideal_X), Qobj(chi_real))
-        return fidelity
+        return [fidelity,U]
     def fidelity_Y(self, **kwargs):
         sigma_y = sigmay()
         U_psi_Y = tensor(sigma_y, qeye(2))
