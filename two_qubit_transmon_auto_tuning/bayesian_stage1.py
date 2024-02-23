@@ -24,64 +24,56 @@ i.e., total number of parameters to optimize over = 4.
 exp = Experiment(
     [Qubit(
     i = 1,
-    w_q = 5 * 2 * np.pi,
-    a_q = -0.3 * 2 * np.pi,
-    r = 0.01 * 2 * np.pi,
-    w_d = 5 * 2 * np.pi),
-
-    Qubit(
-    i = 2,
     w_q = 6 * 2 * np.pi,
     a_q = -0.3 * 2 * np.pi,
     r = 0.01 * 2 * np.pi,
-    w_d = 6 * 2 * np.pi)],
+    w_d = 6 * 2 * np.pi,
+    w_ex12 = 5.3*2*np.pi),
 
-    g = 0.005 * 2 * np.pi,
+    Qubit(
+    i = 2,
+    w_q = 5 * 2 * np.pi,
+    a_q = -0.3 * 2 * np.pi,
+    r = 0.01 * 2 * np.pi,
+    w_d = 5 * 2 * np.pi,
+    w_ex12=5 * 2 * np.pi)
+    ],
 
-    t_exp = 100,
+    g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
-    gate_type = 'CPhase',
+    # t_exp = 64,
+    # t_exp  = 1000, #CPHASE
+    t_exp = 81, #X
+
+    gate_type = 'notCphase',
 
     drive_shape = 'Gaussian')
 
+
 #%% Define Bayes opt parameters
 
-iterations = 300
-init_points = 300
+# iterations = 300
+# init_points = 300
+iterations = 15
+init_points = 10
 
 #%% Define objective function -> gate fidelity as a function of the drives.
-objective = exp.fidelity_CNOT
+objective = exp.fidelity_X
 
 #%% Bayesian Optimization
 
-"""""
-these bounds here are for the case that nothing is known about what the gate
-should look like. However, maybe prior knowledge can be taken about
-gate amplitudes (in an ideal case), and bounds taken around that.
-"""""
+nested_bounds = {
+    'I1p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'I2p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'Q1p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'Q2p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)}
+}
 
-
-pbounds = {'I1_p':
-               { 'amp': (0,50),
-                'center': exp.t_exp/2,
-                'std': exp.t_exp/6},
-           'Q1_p':
-               {'amp': (0,50),
-                'center': exp.t_exp/2,
-                'std': exp.t_exp/6},
-           'I2_p':
-               { 'amp': (0,50),
-                'center': exp.t_exp/2,
-                'std':exp.t_exp/6},
-           'Q2_p':
-               { 'amp': (0,50),
-                'center': exp.t_exp/2,
-                'std': exp.t_exp/6}}
-
+flattened_bounds = flatten_dict(nested_bounds)
 
 optimizer = BayesianOptimization(
     f=objective,
-    pbounds=pbounds,
+    pbounds=flattened_bounds,
     random_state=1,
 )
 

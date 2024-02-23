@@ -11,7 +11,6 @@ from functools import partial
 #%% Function that returns the 2-dim operational basis
 def operational_basis(dim):
     if dim == 2:
-        # return [[(sigmax()+ sigmay()), (sigmax()- sigmay()), (qeye(2)+sigmaz()), (qeye(2)-sigmaz())]]*2
         return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
 
 # %%  Define global variables (constants)
@@ -28,6 +27,23 @@ n2 = a2.dag() * a2
 
 # Define op_basis
 op_basis = operational_basis(2)
+
+# %% Functions that flatten and unflatten dicts - used to interface bayesian with simulation
+def unflatten_dict(flattened_dict):
+    nested_dict = {}
+    for key, value in flattened_dict.items():
+        outer_key, inner_key = key.split('_')
+        if outer_key not in nested_dict:
+            nested_dict[outer_key] = {}
+        nested_dict[outer_key][inner_key] = value
+    return nested_dict
+
+def flatten_dict(nested_dict):
+    flattened_dict = {}
+    for outer_key, inner_dict in nested_dict.items():
+        for inner_key, value in inner_dict.items():
+            flattened_dict[f'{outer_key}_{inner_key}'] = value
+    return flattened_dict
 
 # %% Gaussian Pulse class
 class GaussianPulse:
@@ -239,12 +255,14 @@ class Experiment:
         return H
 
     #%% Simulate quantum process tomography for an 'unknown' (driven) process
-    def simulate_qpt(self, **kwargs):
-        params = kwargs
-        I1_p = params['I1_p']
-        Q1_p = params['Q1_p']
-        I2_p = params['I2_p']
-        Q2_p = params['Q2_p']
+    def simulate_qpt(self, **kwargs_flattened):
+        #unflatten kwargs
+        params = unflatten_dict(kwargs_flattened)
+        # params = kwargs
+        I1_p = params['I1p']
+        Q1_p = params['Q1p']
+        I2_p = params['I2p']
+        Q2_p = params['Q2p']
 
         #Set the 2 drives/qubit based on the drive_shape argument specified
         drive_1 = Drive(
@@ -283,8 +301,8 @@ class Experiment:
             phis = np.angle([ U_psi_real_T[1,1],  U_psi_real_T[2,2],  U_psi_real_T[3,3]], deg = True)
             U33_angle = phis[2] - phis[1] - phis[0]
             U33_angles.append(U33_angle)
-            print(U33_angle)
-        print(U33_angles)
+            # print(U33_angle)
+        # print(U33_angles)
 
         #Convert U from state vector to density matrix form
         U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
@@ -294,21 +312,21 @@ class Experiment:
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
         #Plot the chi matrix of the process
-        self.plot_qpt(chi_real, 'Unknown Process')
+        self.plot_qpt(chi_real, 'Unknown Process', isplot = False)
         return [chi_real,U_psi_real_T]  # the *16 term comes from the newly defined op_basis
 
     #%% QPT Plotting function
-    def plot_qpt(self, chi, title):
-        fig = qpt_plot_combined(chi, [["i", "x", "y", "z"]] * 2, title)
-        plt.show()
+    def plot_qpt(self, chi, title, isplot):
+        if isplot is True:
+            fig = qpt_plot_combined(chi, [["i", "x", "y", "z"]] * 2, title)
+            plt.show()
 
     #%% Power Rabi simulation
     def power_rabi(self, **kwargs):
         amps = np.linspace(0, 100, 100)
         times = np.linspace(0,81,100)
         outputs = np.zeros([len(amps), len(times), 8])
-
-        params = kwargs
+        params = unflatten_dict(kwargs)
         I1_p = params['I1_p']
         Q1_p = params['Q1_p']
         I2_p = params['I2_p']
@@ -420,8 +438,10 @@ class Experiment:
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_Cphase), Qobj(chi_real))
-        return [fidelity, U]
+        # return [fidelity, U]
+        return fidelity
 #%%
+
     def fidelity_X(self,**kwargs):
         # sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
         sigma_x = sigmax()
@@ -432,7 +452,8 @@ class Experiment:
         chi_real, U = vars
         # %% Evaluate process fidelity  ###########################
         fidelity = process_fidelity(Qobj(chi_ideal_X), Qobj(chi_real))
-        return [fidelity,U]
+        # return [fidelity,U]
+        return fidelity
 #%%
     def fidelity_Y(self, **kwargs):
         sigma_y = sigmay()

@@ -7,9 +7,8 @@ from matplotlib import pyplot as plt
 fine for cphase. x gate questionable since redefining GaussianPulse. look into that next -- do power rabi again.
 """
 # %% Virtual Z gates to bring Cphase to expected form
-
+# U is accepted as operating on the state in vector form.
 def virtual_Z_cphase(U):
-
     diags = np.diag(U, k = 0)
     phi =  np.angle(diags)
 
@@ -23,10 +22,11 @@ def virtual_Z_cphase(U):
               [0, 0, 1, 0],
               [0, 0, 0, np.exp(-1j * phi[1])]])
 
-#After applying virtual Z gates
+    #After applying virtual Z gates
     U_c = Z2*Z1*U
 
     return U_c
+
 
 #%%
 exp = Experiment(
@@ -50,44 +50,47 @@ exp = Experiment(
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    t_exp  = 1000,
-    # t_exp = 81,
+    # t_exp  = 1000, #CPHASE
+    t_exp = 81, #X
 
-    gate_type = 'Cphase',
+    gate_type = 'notCphase',
 
     drive_shape = 'Gaussian')
 
-kwargs = {'I1_p':
+kwargs = {'I1p':
               # { 'amp': 7.296, #X
                 { 'amp': 0,
                 'center': exp.t_exp/2,
                 'std': exp.t_exp/6},
-          'Q1_p':
+          'Q1p':
               # {'amp': 151.2, #X
-                { 'amp': 0,
+                { 'amp': 50,
                'center': exp.t_exp / 2,
                'std': exp.t_exp / 6},
-          'I2_p':
+          'I2p':
               # { 'amp':15.76, #X
                 { 'amp': 0,
                 'center': exp.t_exp/2,
                 'std': exp.t_exp/6},
-          'Q2_p':
+          'Q2p':
           # {'amp': 12.61, #X
                 { 'amp': 0,
                 'center': exp.t_exp/2,
                 'std': exp.t_exp/6},
 
-          'drive': 'Q'
+          # 'drive': 'Q'
           }
 
+#%% Do the flattening
+kwargs = flatten_dict(kwargs)
 #%%
 
 #
 if exp.gate_type == 'Cphase':
-    x = exp.fidelity_Cphase(**kwargs)
+    # x = exp.fidelity_Cphase(**kwargs)
     np.set_printoptions(precision=3, suppress=True)
-    fid, U = x
+    # fid, U = x
+    U = exp.simulate_qpt(**kwargs)
     U = virtual_Z_cphase(U)
     U = spre(U) * spost(U.dag())
     fig = qpt_plot_combined(qpt(U, op_basis), [["i", "x", "y", "z"]] * 2, "sim")
@@ -101,8 +104,9 @@ if exp.gate_type == 'Cphase':
     fig2 = qpt_plot_combined(qpt(U_rho_Cphase, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
     plt.show()
 else:
-    x = exp.fidelity_X(**kwargs)
-    fid, U = x
+    # x = exp.fidelity_X(**kwargs)
+    # fid, U = x
+    U = exp.simulate_qpt(**kwargs)
     U = spre(U) * spost(U.dag())
     fig = qpt_plot_combined(qpt(U, op_basis), [["i", "x", "y", "z"]] * 2, "sim")
     plt.show()
@@ -115,7 +119,7 @@ else:
 
 
 #%% Power rabi
-exp.power_rabi(**kwargs)
+# exp.power_rabi(**kwargs)
 
 #%% Testing DRAG
 
