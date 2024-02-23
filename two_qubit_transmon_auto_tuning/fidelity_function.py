@@ -34,67 +34,61 @@ n2 = a2.dag() * a2
 
 # Define op_basis
 op_basis = operational_basis(2)
-
-#%% define universal Pulse class
-
-class Pulse:
-    def __init__(self,  tmeas, **kwargs):
-        self.tmeas = tmeas
-        self.params = kwargs
-
 # %%
-class GaussianPulse(Pulse):
-    def define_pulse(self):
+class GaussianPulse:
+    def __init__(self, **kwargs):
+        # super().__init__(**kwargs)
+        self.params = kwargs
         self.amp = self.params.get('amp', 50.0)
         self.center = self.params.get('center', 0.0)
         self.std = self.params.get('std', 1.0)
 
-    def __call__(self, t, *args, **kwargs):
-        self.define_pulse()
+    def __call__(self, t, **kwargs):
+        # self.define_pulse()
         return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
                 self.std * np.sqrt(2 * np.pi))
 
 # %%
 
-class DRAG(Pulse):
-    def define_pulse(self):
-        # self.Gaussian = GaussianPulse(self.params)
+class DRAG:
+    def __init__(self, **kwargs):
+        # super().__init__(**kwargs)
+        self.params = kwargs
         self.GaussianParams = self.params.get('GaussianParams')
         self.lamb = self.params.get('lamb', 0.75)
         self.alpha = self.params.get('alpha', 1)
 
-    def __call__(self, t, *args, **kwargs):
-        self.define_pulse()
-        Gaussian = GaussianPulse(t, **self.GaussianParams)
+    def __call__(self, t, **kwargs):
+        # self.define_pulse()
+        print(t)
+        Gaussian = GaussianPulse(**self.GaussianParams)
         center = self.GaussianParams.get('center')
         std = self.GaussianParams.get('std')
         B_t_coeff = ((t - center)**3)/(2 * std**4)
-        A_drag = Gaussian
-        print(A_drag)
-        B_drag = (self.lamb / self.alpha) * Gaussian * B_t_coeff
-        print(B_drag)
-        # return [A_drag, B_drag]
-        return A_drag
-
+        A_drag = Gaussian(t)
+        B_drag = (self.lamb / self.alpha) * Gaussian(t) * B_t_coeff
+        return [A_drag, B_drag]
 
 #%%
-class GRAPE(Pulse):
-    def define_pulse(self):
+class GRAPE:
+    def __init__(self, **kwargs):
+        self.params = kwargs
         self.N = self.params.get('N', 5)
-        self.amps = self.params.get('amps', [1,1,1,1,1])
+        self.amps = self.params.get('amps', [1, 1, 1, 1, 1])
 
-    def __call__(self, t, *args, **kwargs):
-        self.define_pulse()
-        return
+    def __call__(self, *args, **kwargs):
+        # self.define_pulse()
+        return 0
 
 # %%
-def drive_shape(shape, tmeas, **kwargs):
+def drive_shape(shape, **kwargs):
+
     if shape == 'Gaussian':
-        return GaussianPulse(tmeas, **kwargs)
+        return GaussianPulse(**kwargs)
     if shape == 'DRAG':
-        return DRAG(tmeas, **kwargs)
+        return DRAG(**kwargs)
     if shape == 'GRAPE':
-        return GRAPE(tmeas, **kwargs)
+        return GRAPE(**kwargs)
 
 #%%
 class LowPassStepValue:
@@ -109,9 +103,9 @@ class LowPassStepValue:
         return (self.value - self.default_value) * (1 - np.exp(
             -(t - self.step_time) / self.tau)) + self.default_value if t > self.step_time else self.default_value
 
-
+# %%
 class Linear:
-    def __init__(self, t0, y0, t_stop, y_stop ):
+    def __init__(self, t0, y0, t_stop, y_stop):
         self.t0 = t0
         self.y0 = y0
         self.t_stop = t_stop
@@ -202,7 +196,7 @@ class Experiment:
         q1, q2 = qubits
         d1, d2 = drives
         #
-        w1_set = self.Cphase(args)  # if cphase on and state in |11>, should set wq1 as a function based on where t lies in the interval.
+        w1_set = self.Cphase(args)
         if self.gate_type == 'Cphase':
             q1.set_wq(w1_set)
 
@@ -216,8 +210,8 @@ class Experiment:
         else:
             H_02 = n2 * q2.w_q
 
-            H_0d1 = -n1 * q1.w_d
-            H_0d2 = -n2 * q2.w_d
+        H_0d1 = -n1 * q1.w_d
+        H_0d2 = -n2 * q2.w_d
 
         if dim == 3:
             H_0 = 0.5 * ((q1.a_q * a1.dag() * a1.dag() * a1 * a1) + (q2.a_q * a2.dag() * a2.dag() * a2 * a2))
@@ -226,76 +220,32 @@ class Experiment:
 
         # Drive terms
         if type(d1.I) != float:
-            H_d1_0b = [-0.5 * q1.r * 1j * (a1 - a1.dag()), d1.I]
+            H_d1_0b = [-0.5 * q1.r * 1j * (a1 - a1.dag()), lambda t, args: d1.I(t)]
         else:
             H_d1_0b = -0.5 * q1.r * 1j * (a1 - a1.dag()) * d1.I
 
         if type(d1.Q) != float:
-            H_d1_0a = [-0.5 * q1.r * (a1 + a1.dag()), d1.Q]
+            H_d1_0a = [-0.5 * q1.r * (a1 + a1.dag()), lambda t, args: d1.Q(t)]
         else:
             H_d1_0a = -0.5 * q1.r * (a1 + a1.dag()) * d1.Q
 
         if type(d2.I) != float:
-            H_d2_0b = [-0.5*1j * q2.r * (a2 - a2.dag()), d2.I]
+            H_d2_0b = [-0.5*1j * q2.r * (a2 - a2.dag()), lambda t, args: d2.I(t)]
         else:
             H_d2_0b = -0.5*1j * q2.r * (a2 - a2.dag()) * d2.I
 
         if type(d2.Q) != float:
-            H_d2_0a = [-0.5 * q2.r * (a2 + a2.dag()), d2.Q]
+            H_d2_0a = [-0.5 * q2.r * (a2 + a2.dag()), lambda t, args: d2.Q(t)]
         else:
             H_d2_0a = -0.5 * q2.r * (a2 + a2.dag()) * d2.Q
 
         delta_d = q1.w_d - q2.w_d
-        H_d1_1 = [a1 * a2.dag(), lambda t, *args: self.g * np.exp(-1j * delta_d * t)]
-        H_d2_1 = [a1.dag() * a2, lambda t, *args: self.g * np.exp(1j * delta_d * t)]
-
-        # delta = q1.w_q - q2.w_q
-        #%%
-        # if type(q1.w_q) != float:
-        #     H_d1_1 = [g * a1 * a2.dag(), lambda t, *args: (np.exp(-1j * (q1.w_q(t)) - q2.w_q) * t)]
-        #     H_d2_1 = [g * a1.dag() * a2, lambda t, *args: (np.exp(1j * (q1.w_q(t)) - q2.w_q) * t)]
-        # #%%
-        # else:
-        #     H_d1_1 = [g * a1 * a2.dag(), lambda t, *args: np.exp(-1j * (q1.w_q - q2.w_q) * t)]
-        #     H_d2_1 = [g * a1.dag() * a2, lambda t, *args: np.exp(1j * (q1.w_q - q2.w_q) * t)]
+        H_d1_1 = [a1 * a2.dag(), lambda t, args: self.g * np.exp(-1j * delta_d * t)]
+        H_d2_1 = [a1.dag() * a2, lambda t, args: self.g * np.exp(1j * delta_d * t)]
 
         # Total H
         H = [H_0, H_01, H_02, H_0d1, H_0d2, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
 
-        # # the qubit 1 drift hamiltonian
-        # H1 = [
-        #     (q1.a_q / 2) * (a1.dag() * a1.dag() * a1 * a1) - q1.w_d * (
-        #                 a1.dag() * a1),
-        #     [a1.dag() * a1, q1.w_q]
-        # ]
-        #
-        # # the qubit 1 drive hamiltonian
-        # H1d = [
-        #     [-q1.r * 1j * (a1 - a1.dag()) / 2., d1.I],
-        #     [-q1.r * (a1 + a1.dag()) / 2., d1.Q]
-        # ]
-        #
-        # # the qubit 2 drift hamiltonian
-        # H2 = [
-        #     (q1.a_q / 2) * (a2.dag() * a2.dag() * a2 * a2) - q2.w_d * (
-        #                 a2.dag() * a2),
-        #     [(a2.dag() * a2), q2.w_q]
-        # ]
-        #
-        # H2d = [
-        #     [-q2.r * 1j * (a2 - a2.dag()) / 2., d2.I],
-        #     [-q2.r * (a2 + a2.dag()) / 2., d2.Q]
-        # ]
-        #
-        # delta_d = q1.w_d - q2.w_d
-        #
-        # # the interaction hamiltonian
-        # H_int = [
-        #     [a1 * a2.dag(), lambda t, *args: self.g * np.exp(-1j * delta_d * t)],
-        #     [a1.dag() * a2, lambda t, *args: self.g * np.exp(1j * delta_d * t)]
-        # ]
-        #
-        # H= [*H1, *H1d, *H2, *H2d, *H_int]
 
         return H
 
@@ -307,13 +257,13 @@ class Experiment:
         Q2_p = params['Q2_p']
 
         drive_1 = Drive(
-            I=drive_shape(self.drive_shape, self.t_exp, **I1_p),
-            Q=drive_shape(self.drive_shape, self.t_exp, **Q1_p)
+            I=drive_shape(self.drive_shape, **I1_p),
+            Q=drive_shape(self.drive_shape,**Q1_p)
         )
 
         drive_2 = Drive(
-            I=drive_shape(self.drive_shape, self.t_exp, **I2_p),
-            Q=drive_shape(self.drive_shape, self.t_exp, **Q2_p)
+            I=drive_shape(self.drive_shape,  **I2_p),
+            Q=drive_shape(self.drive_shape, **Q2_p)
         )
 
         drives = [drive_1, drive_2]
@@ -327,6 +277,7 @@ class Experiment:
         for tau_ratio in tau_ratios:
             H = self.create_H(drives, args = {'tau_ratio': tau_ratio, 't0': 0}) #lambda function of time.
             U_psi_real = qutip.propagator(H, times)
+
     #%%
             np.set_printoptions(precision=1)
             U_psi_real_T = U_psi_real[nT - 1]
@@ -344,8 +295,81 @@ class Experiment:
 
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
+        # %% Plotting
+        self.plot_qpt(chi_real, 'Unknown Process')
         return [chi_real,U_psi_real_T]  # the *16 term comes from the newly defined op_basis
 
+    #%% QPT Plotting function
+    def plot_qpt(self, chi, title):
+        fig = qpt_plot_combined(chi, [["i", "x", "y", "z"]] * 2, title)
+        plt.show()
+
+    #%%
+    def power_rabi(self, **kwargs):
+        amps = np.linspace(0, 100, 100)
+        times = np.linspace(0,81,100)
+        outputs = np.zeros([len(amps), len(times), 8])
+
+        params = kwargs
+        I1_p = params['I1_p']
+        Q1_p = params['Q1_p']
+        I2_p = params['I2_p']
+        Q2_p = params['Q2_p']
+
+        drive_1 = Drive(
+            I=drive_shape(self.drive_shape, **I1_p),
+            Q=drive_shape(self.drive_shape, **Q1_p)
+        )
+
+        drive_2 = Drive(
+            I=drive_shape(self.drive_shape, **I2_p),
+            Q=drive_shape(self.drive_shape, **Q2_p)
+        )
+
+        drives = [drive_1, drive_2]
+
+        I = basis(3, 0) * basis(3, 0).dag() + basis(3, 1) * basis(3, 1).dag()
+        sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
+        sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
+        sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
+
+        sigma_x1 = tensor(sigma_x, I)
+        sigma_x2 = tensor(I, sigma_x)
+
+        sigma_y1 = tensor(sigma_y, I)
+        sigma_y2 = tensor(I, sigma_y)
+
+        sigma_z1 = tensor(sigma_z, I)
+        sigma_z2 = tensor(I, sigma_z)
+
+        for i, amp in enumerate(amps):
+            # choose which drive to drive based on keyword
+            if params['drive'] == "I":
+                drive_1.I.amp = amp
+            if params['drive'] == "Q":
+                drive_1.Q.amp = amp
+            # Define starting state
+            psi0 = tensor(basis(3,0), basis(3,0))
+
+            # create H
+            H = self.create_H(drives, args = {'tau_ratio': 0.7676, 't0': 0})
+
+            # input to mesolve
+            res = mesolve(H, psi0, times, [], [sigma_x1, sigma_y1, sigma_z1, sigma_x2, sigma_y2, sigma_z2, n1, n2])
+            outputs[i, ...] = np.stack(res.expect, axis=-1)
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(amps, outputs[:, -1, 3 * (self.qubits[0].i - 1)], label='X', linestyle='--')
+        ax.plot(amps, outputs[:, -1, 3 * (self.qubits[0].i - 1) + 1], label='Y', linestyle='--')
+        ax.plot(amps, outputs[:, -1, 3 * (self.qubits[0].i - 1) + 2], label='Z')
+
+        ax.set_ylim([-1, 1])
+        ax.set_xlabel('Amplitude')
+        ax.set_ylabel('Expectation value')
+        ax.set_title('Power Rabi Oscillations')
+        ax.legend()
+        plt.show()
+#%%
     def Cphase(self, args):
         exp = self
         on = exp.gate_type == 'Cphase'
@@ -353,9 +377,6 @@ class Experiment:
         t0 = args['t0']
         tau = args['tau_ratio'] * exp.t_exp
         t_tune = 0.5 * (exp.t_exp - tau)
-        # t0 = 0
-        # tau = 0.15 * exp.t_exp
-        # t_tune = 0.5*(1-tau)*exp.t_exp
         y0 = q1.w_q_def
         y_max = q1.w_ex12
 

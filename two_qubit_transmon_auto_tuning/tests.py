@@ -3,6 +3,11 @@ from qutip import *
 import numpy as np
 from matplotlib import pyplot as plt
 
+"""
+fine for cphase. x gate questionable since redefining GaussianPulse. look into that next -- do power rabi again.
+"""
+
+
 exp = Experiment(
     [Qubit(
     i = 1,
@@ -24,10 +29,10 @@ exp = Experiment(
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    t_exp  = 1000,
-    # t_exp = 81,
+    # t_exp  = 1000,
+    t_exp = 81,
 
-    gate_type = 'Cphase',
+    gate_type = 'notCphase',
 
     drive_shape = 'Gaussian')
 
@@ -35,67 +40,77 @@ kwargs = {'I1_p':
               # { 'amp': 7.296, #X
                 { 'amp': 0,
                 'center': exp.t_exp/2,
-                'std': exp.t_exp/10},
+                'std': exp.t_exp/6},
           'Q1_p':
               # {'amp': 151.2, #X
-                { 'amp':    0,
+                { 'amp': 50,
                'center': exp.t_exp / 2,
-               'std': exp.t_exp / 10},
+               'std': exp.t_exp / 6},
           'I2_p':
               # { 'amp':15.76, #X
                 { 'amp': 0,
                 'center': exp.t_exp/2,
-                'std': exp.t_exp/60},
+                'std': exp.t_exp/6},
           'Q2_p':
           # {'amp': 12.61, #X
                 { 'amp': 0,
                 'center': exp.t_exp/2,
-                'std': exp.t_exp/60}}
+                'std': exp.t_exp/6},
+
+          'drive': 'Q'
+          }
 
 #%%
 
 #
-# x = exp.fidelity_Cphase(**kwargs)
-# np.set_printoptions(precision=3, suppress=True)
-# fid, U = x
+x = exp.fidelity_Cphase(**kwargs)
+np.set_printoptions(precision=3, suppress=True)
+fid, U = x
 
-#%% Virtual Z gates to bring Cphase to expected form
+# %% Virtual Z gates to bring Cphase to expected form
 
-# Z2 = Qobj([[1.   +0.j  ,  0.   +0.j  ,  0.   +0.j  ,  0.   +0.j   ],
-#  [0.   +0.j  ,   np.exp(-1j*0.46454206314509705), 0.   +0.j   , 0.   +0.j   ],
-#  [0.   +0.j  ,  0.   +0.j   , 1.   +0.j  ,  0.   +0.j   ],
-#  [0.   +0.j  ,  0.   +0.j   , 0.   +0.j  ,  np.exp(-1j*0.46454206314509705)]]  )
-#
-# Z1 = Qobj([[1.   +0.j ,   0.   +0.j  ,  0.   +0.j  ,  0.   +0.j   ],
-#  [0.   +0.j  ,  1.   +0.j ,   0.   +0.j  ,  0.   +0.j   ],
-#  [0.   +0.j  ,  0.   +0.j  ,   np.exp(-1j*-2.432640966569607) ,0.   +0.j   ],
-#  [0.   +0.j  ,  0.   +0.j ,   0.   +0.j ,    np.exp(-1j*-2.432640966569607)]])
-#
-#
-# #%% After applying virtual Z gates
-# U_c = Z2*Z1*U
+Z2 = Qobj([[1.   +0.j  ,  0.   +0.j  ,  0.   +0.j  ,  0.   +0.j   ],
+ [0.   +0.j  ,   np.exp(-1j*0.46454206314509705), 0.   +0.j   , 0.   +0.j   ],
+ [0.   +0.j  ,  0.   +0.j   , 1.   +0.j  ,  0.   +0.j   ],
+ [0.   +0.j  ,  0.   +0.j   , 0.   +0.j  ,  np.exp(-1j*0.46454206314509705)]]  )
 
+Z1 = Qobj([[1.   +0.j ,   0.   +0.j  ,  0.   +0.j  ,  0.   +0.j   ],
+ [0.   +0.j  ,  1.   +0.j ,   0.   +0.j  ,  0.   +0.j   ],
+ [0.   +0.j  ,  0.   +0.j  ,   np.exp(-1j*-2.432640966569607) ,0.   +0.j   ],
+ [0.   +0.j  ,  0.   +0.j ,   0.   +0.j ,    np.exp(-1j*-2.432640966569607)]])
+
+
+#%% After applying virtual Z gates
+U_c = Z2*Z1*U
+
+#%% Power rabi
+exp.power_rabi(**kwargs)
 
 #%% Testing DRAG
-
 
 kwargs_drag = {
     'GaussianParams': {
     'amp': 50,
-    'center': 0,
+    'center': 500,
     'std': 100
     },
-    'lamb' : 0.75,
-    'alpha'  : 1
+    'lamb': 0.75,
+    'alpha': 1
 }
+#
 
-t = 50
-drag = DRAG(t, **kwargs_drag)
-gauss = GaussianPulse(t, **kwargs_drag['GaussianParams'])
-print(drag)
-print(gauss)
+# %% Checking Gaussian shape
+# times = np.linspace(0,1000,400)
+# g = []
+# for t in times:
+#     g.append(GaussianPulse(**kwargs_drag['GaussianParams'])(t))
+# plt.plot(times, g)
+# plt.show
 
 
+# t = 50
+# drag = DRAG(**kwargs_drag)
+# gauss = GaussianPulse(**kwargs_drag['GaussianParams'])
 
 #%%
 # q1 = exp.qubits[0]
