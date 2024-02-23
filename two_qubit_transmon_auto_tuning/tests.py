@@ -6,8 +6,29 @@ from matplotlib import pyplot as plt
 """
 fine for cphase. x gate questionable since redefining GaussianPulse. look into that next -- do power rabi again.
 """
+# %% Virtual Z gates to bring Cphase to expected form
 
+def virtual_Z_cphase(U):
 
+    diags = np.diag(U, k = 0)
+    phi =  np.angle(diags)
+
+    Z1 = Qobj([[1, 0, 0, 0],
+              [0, 1, 0, 0],
+              [0, 0, np.exp(-1j * phi[2]), 0],
+              [0, 0, 0, np.exp(-1j * phi[2])]])
+
+    Z2 =  Qobj([[1, 0, 0, 0],
+              [0, np.exp(-1j * phi[1]), 0, 0],
+              [0, 0, 1, 0],
+              [0, 0, 0, np.exp(-1j * phi[1])]])
+
+#After applying virtual Z gates
+    U_c = Z2*Z1*U
+
+    return U_c
+
+#%%
 exp = Experiment(
     [Qubit(
     i = 1,
@@ -29,10 +50,10 @@ exp = Experiment(
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    # t_exp  = 1000,
-    t_exp = 81,
+    t_exp  = 1000,
+    # t_exp = 81,
 
-    gate_type = 'notCphase',
+    gate_type = 'Cphase',
 
     drive_shape = 'Gaussian')
 
@@ -43,7 +64,7 @@ kwargs = {'I1_p':
                 'std': exp.t_exp/6},
           'Q1_p':
               # {'amp': 151.2, #X
-                { 'amp': 50,
+                { 'amp': 0,
                'center': exp.t_exp / 2,
                'std': exp.t_exp / 6},
           'I2_p':
@@ -63,25 +84,35 @@ kwargs = {'I1_p':
 #%%
 
 #
-x = exp.fidelity_Cphase(**kwargs)
-np.set_printoptions(precision=3, suppress=True)
-fid, U = x
+if exp.gate_type == 'Cphase':
+    x = exp.fidelity_Cphase(**kwargs)
+    np.set_printoptions(precision=3, suppress=True)
+    fid, U = x
+    U = virtual_Z_cphase(U)
+    U = spre(U) * spost(U.dag())
+    fig = qpt_plot_combined(qpt(U, op_basis), [["i", "x", "y", "z"]] * 2, "sim")
+    plt.show()
+    U_psi_Cphase = Qobj([[1, 0, 0, 0],
+                         [0, 1, 0, 0],
+                         [0, 0, 1, 0],
+                         [0, 0, 0, -1]])
+    U_rho_Cphase = spre(U_psi_Cphase) * spost(U_psi_Cphase.dag())
+    chi_ideal_Cphase = qpt(U_rho_Cphase, op_basis)
+    fig2 = qpt_plot_combined(qpt(U_rho_Cphase, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
+    plt.show()
+else:
+    x = exp.fidelity_X(**kwargs)
+    fid, U = x
+    U = spre(U) * spost(U.dag())
+    fig = qpt_plot_combined(qpt(U, op_basis), [["i", "x", "y", "z"]] * 2, "sim")
+    plt.show()
+    U_psi_X = tensor(sigmax(), qeye(2))
+    U_rho_X = spre(U_psi_X) * spost(U_psi_X.dag())
+    chi_ideal_X = qpt(U_rho_X, op_basis)
+    fig2 = qpt_plot_combined(qpt(U_rho_X, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
+    plt.show()
 
-# %% Virtual Z gates to bring Cphase to expected form
 
-Z2 = Qobj([[1.   +0.j  ,  0.   +0.j  ,  0.   +0.j  ,  0.   +0.j   ],
- [0.   +0.j  ,   np.exp(-1j*0.46454206314509705), 0.   +0.j   , 0.   +0.j   ],
- [0.   +0.j  ,  0.   +0.j   , 1.   +0.j  ,  0.   +0.j   ],
- [0.   +0.j  ,  0.   +0.j   , 0.   +0.j  ,  np.exp(-1j*0.46454206314509705)]]  )
-
-Z1 = Qobj([[1.   +0.j ,   0.   +0.j  ,  0.   +0.j  ,  0.   +0.j   ],
- [0.   +0.j  ,  1.   +0.j ,   0.   +0.j  ,  0.   +0.j   ],
- [0.   +0.j  ,  0.   +0.j  ,   np.exp(-1j*-2.432640966569607) ,0.   +0.j   ],
- [0.   +0.j  ,  0.   +0.j ,   0.   +0.j ,    np.exp(-1j*-2.432640966569607)]])
-
-
-#%% After applying virtual Z gates
-U_c = Z2*Z1*U
 
 #%% Power rabi
 exp.power_rabi(**kwargs)

@@ -8,17 +8,11 @@ from dataclasses import dataclass
 import math
 from functools import partial
 
-
-"""
-TODO: figure out how to define is_11. Make some connection with the qpt code to the main function-code : is_11 is
-dependent on the op in op_basis_list.
-"""
-
+#%% Function that returns the 2-dim operational basis
 def operational_basis(dim):
     if dim == 2:
         # return [[(sigmax()+ sigmay()), (sigmax()- sigmay()), (qeye(2)+sigmaz()), (qeye(2)-sigmaz())]]*2
         return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
-
 
 # %%  Define global variables (constants)
 # Define dim
@@ -34,7 +28,8 @@ n2 = a2.dag() * a2
 
 # Define op_basis
 op_basis = operational_basis(2)
-# %%
+
+# %% Gaussian Pulse class
 class GaussianPulse:
     def __init__(self, **kwargs):
         # super().__init__(**kwargs)
@@ -48,8 +43,7 @@ class GaussianPulse:
         return self.amp * np.exp(-(t - self.center) ** 2 / (2 * self.std ** 2)) / (
                 self.std * np.sqrt(2 * np.pi))
 
-# %%
-
+# %% DRAG Pulse class
 class DRAG:
     def __init__(self, **kwargs):
         # super().__init__(**kwargs)
@@ -59,8 +53,6 @@ class DRAG:
         self.alpha = self.params.get('alpha', 1)
 
     def __call__(self, t, **kwargs):
-        # self.define_pulse()
-        print(t)
         Gaussian = GaussianPulse(**self.GaussianParams)
         center = self.GaussianParams.get('center')
         std = self.GaussianParams.get('std')
@@ -69,15 +61,13 @@ class DRAG:
         B_drag = (self.lamb / self.alpha) * Gaussian(t) * B_t_coeff
         return [A_drag, B_drag]
 
-#%%
+#%% GRAPE - INCOMPLETE
 class GRAPE:
     def __init__(self, **kwargs):
         self.params = kwargs
         self.N = self.params.get('N', 5)
         self.amps = self.params.get('amps', [1, 1, 1, 1, 1])
-
     def __call__(self, *args, **kwargs):
-        # self.define_pulse()
         return 0
 
 # %%
@@ -119,7 +109,6 @@ class Linear:
             return y
 
 # %% Define the piecewise linear pulse class
-
 class LinearFluxTuning:
     def __init__(self, t0, y0, t_tune, y_max, tau):
         self.t0 = t0
@@ -181,7 +170,7 @@ class Qubit:
     def set_wq(self, wq_update):
         self.w_q = wq_update
 #%%
-#%% Class that defines experimental parameters
+#%% Class that defines the experiment
 class Experiment:
     def __init__(self, qubits, g, t_exp, gate_type, drive_shape):
         self.qubits = qubits
@@ -190,12 +179,13 @@ class Experiment:
         self.gate_type = gate_type
         self.drive_shape = drive_shape
 
+#%% Hamiltonian-creating function
     def create_H(self, drives, args):
         qubits = self.qubits
-        g = self.g
         q1, q2 = qubits
         d1, d2 = drives
-        #
+
+        ## if gate type is Cphase, make wq a fn of time (flux tuning).
         w1_set = self.Cphase(args)
         if self.gate_type == 'Cphase':
             q1.set_wq(w1_set)
@@ -246,9 +236,9 @@ class Experiment:
         # Total H
         H = [H_0, H_01, H_02, H_0d1, H_0d2, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
 
-
         return H
 
+    #%% Simulate quantum process tomography for an 'unknown' (driven) process
     def simulate_qpt(self, **kwargs):
         params = kwargs
         I1_p = params['I1_p']
@@ -256,6 +246,7 @@ class Experiment:
         I2_p = params['I2_p']
         Q2_p = params['Q2_p']
 
+        #Set the 2 drives/qubit based on the drive_shape argument specified
         drive_1 = Drive(
             I=drive_shape(self.drive_shape, **I1_p),
             Q=drive_shape(self.drive_shape,**Q1_p)
@@ -267,35 +258,42 @@ class Experiment:
         )
 
         drives = [drive_1, drive_2]
-#%%
+        #%%
         nT: int = 100
         times = np.linspace(0, self.t_exp, nT)
+        # tau_ratios = np.linspace(0,1,100) #Initially, was iterating to find the best tau_ratio.
 
-        # tau_ratios = np.linspace(0,1,100)
+        #Choose the proportion of experiment time to stay at |11> to |20> transition frequency
         tau_ratios = [0.7676767676767677]
         U33_angles = []
         for tau_ratio in tau_ratios:
-            H = self.create_H(drives, args = {'tau_ratio': tau_ratio, 't0': 0}) #lambda function of time.
+            H = self.create_H(drives, args = {'tau_ratio': tau_ratio, 't0': 0}) #H is a lambda function of time.
             U_psi_real = qutip.propagator(H, times)
-
-    #%%
             np.set_printoptions(precision=1)
+
+            #Take entry at last time step
             U_psi_real_T = U_psi_real[nT - 1]
+
+            #Eliminate rows/columns corresponding to |2> state.
             rows = [0,1,3,4]
             cols = [0,1,3,4]
             U_psi_real_T = (Qobj((U_psi_real_T[rows][:,cols])))
+
+            #Print out relative angle of last diagonal element
             phis = np.angle([ U_psi_real_T[1,1],  U_psi_real_T[2,2],  U_psi_real_T[3,3]], deg = True)
             U33_angle = phis[2] - phis[1] - phis[0]
             U33_angles.append(U33_angle)
             print(U33_angle)
         print(U33_angles)
-        # print(U_psi_real_T)
+
+        #Convert U from state vector to density matrix form
         U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
         U_rho_real = Qobj(U_rho_real)
 
+        #Evaluate chi matrix of process.
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
-        # %% Plotting
+        #Plot the chi matrix of the process
         self.plot_qpt(chi_real, 'Unknown Process')
         return [chi_real,U_psi_real_T]  # the *16 term comes from the newly defined op_basis
 
@@ -304,7 +302,7 @@ class Experiment:
         fig = qpt_plot_combined(chi, [["i", "x", "y", "z"]] * 2, title)
         plt.show()
 
-    #%%
+    #%% Power Rabi simulation
     def power_rabi(self, **kwargs):
         amps = np.linspace(0, 100, 100)
         times = np.linspace(0,81,100)
@@ -369,7 +367,8 @@ class Experiment:
         ax.set_title('Power Rabi Oscillations')
         ax.legend()
         plt.show()
-#%%
+#%% The Cphase function - sets qubit_1 frequency as a function of time, if gate is on.
+    #Frequency decreases linearly, stays constant for some time, then increases linearly back to the intrinsic frequency.
     def Cphase(self, args):
         exp = self
         on = exp.gate_type == 'Cphase'
@@ -408,7 +407,7 @@ class Experiment:
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_CNOT), Qobj(chi_real))
         return fidelity
-
+# %%
     def fidelity_Cphase(self, **kwargs):
         U_psi_Cphase = Qobj([[1, 0, 0, 0],
                            [0, 1, 0, 0],
@@ -422,7 +421,7 @@ class Experiment:
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_Cphase), Qobj(chi_real))
         return [fidelity, U]
-
+#%%
     def fidelity_X(self,**kwargs):
         # sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
         sigma_x = sigmax()
@@ -434,6 +433,7 @@ class Experiment:
         # %% Evaluate process fidelity  ###########################
         fidelity = process_fidelity(Qobj(chi_ideal_X), Qobj(chi_real))
         return [fidelity,U]
+#%%
     def fidelity_Y(self, **kwargs):
         sigma_y = sigmay()
         U_psi_Y = tensor(sigma_y, qeye(2))
@@ -444,7 +444,7 @@ class Experiment:
         # %% Evaluate process fidelity  ###########################
         fidelity = process_fidelity(Qobj(chi_ideal_Y), Qobj(chi_real))
         return fidelity
-
+#%%
     def fidelity_Y_90(self, **kwargs):
         U_psi_Y_90 = tensor(Qobj([[1 / np.sqrt(2), 1 / np.sqrt(2)], [-1 / np.sqrt(2), 1 / np.sqrt(2)]]), qeye(2))
         U_rho_Y_90 = spre(U_psi_Y_90) * spost(U_psi_Y_90.dag())
@@ -454,7 +454,7 @@ class Experiment:
         # %% Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_Y_90), Qobj(chi_real))
         return fidelity
-
+#%%
     def fidelity_H(self, **kwargs):
         U_psi_H = tensor(Qobj([[1 / np.sqrt(2), 1 / np.sqrt(2)], [1 / np.sqrt(2), -1 / np.sqrt(2)]]), qeye(2))
         U_rho_H = spre(U_psi_H) * spost(U_psi_H.dag())
@@ -464,7 +464,7 @@ class Experiment:
         # %% Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_H), Qobj(chi_real))
         return fidelity
-
+#%%
     def fidelity_iSWAP(self, **kwargs):
         U_psi_SWAP = Qobj([[1, 0, 0, 0],
                            [0, 0, 1, 0],
@@ -485,6 +485,7 @@ class Experiment:
         fidelity = process_fidelity(Qobj(chi_ideal_iSWAP), Qobj(chi_real))
         return fidelity
 
+#%%
     def fidelity_CZ(self, **kwargs):
         U_psi_CZ = Qobj([[1, 0, 0, 0],
                          [0, 1, 0, 0],
@@ -498,7 +499,7 @@ class Experiment:
         fidelity = process_fidelity(Qobj(chi_ideal_CZ), Qobj(chi_real))
         return fidelity
 
-#%%
+#%% Evaluate the <Process Fidelity>
 def process_fidelity(chi_ideal: Qobj, chi_real: Qobj):
     fid = ((chi_ideal * chi_real).tr()).real
     return fid
