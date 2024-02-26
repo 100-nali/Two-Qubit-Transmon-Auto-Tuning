@@ -1,13 +1,11 @@
 #%% Imports
-import numpy as np
-from matplotlib import pyplot as plt
-# import scipy
-# from sklearn.gaussian_process import GaussianProcessRegressor
-# from sklearn.gaussian_process.kernels import RBF
+
 from bayes_opt import BayesianOptimization
+from bayes_opt import SequentialDomainReductionTransformer
 from bayes_opt.util import UtilityFunction
 from fidelity_function import *
-from bayes_opt.event import Events, DEFAULT_EVENTS
+from functools import partial
+
 
 
 #%% Notes
@@ -54,28 +52,43 @@ exp = Experiment(
 
 # iterations = 300
 # init_points = 300
-iterations = 10
+iterations = 20
 init_points = 20
 
 #%% Define objective function -> gate fidelity as a function of the drives.
 objective = exp.fidelity_Cphase
 
+#%% input the parameters that are not to be iterated over into objective
+
+kwargs = {'I1p': {'amp': 0, 'center': exp.t_exp/2, 'std': exp.t_exp/6},
+    'I2p': {'amp': 0, 'center': exp.t_exp/2, 'std': exp.t_exp/6},
+    'Q1p': {'amp': 0, 'center': exp.t_exp/2, 'std': exp.t_exp/6},
+    'Q2p': {'amp': 0, 'center': exp.t_exp/2, 'std': exp.t_exp / 6}}
+flattened_kwargs = flatten_dict(kwargs)
+objective = partial(objective, **flattened_kwargs)
+
+
 #%% Bayesian Optimization
 
 nested_bounds = {
-    'I1p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'I2p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'Q1p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'Q2p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'CPHASE': {'ratio': (0.2, 0.8), 'w12': (5.2*np.pi*2, 5.4*np.pi*2)}
+    # 'I1p': {'amp': (0, 1), 'center': (exp.t_exp/2.5,exp.t_exp/1.5) , 'std': (exp.t_exp/7.5, exp.t_exp/4.5)},
+    # 'I2p': {'amp': (0, 1), 'center': (exp.t_exp/2.5,exp.t_exp/1.5) , 'std': (exp.t_exp/7.5, exp.t_exp/4.5)},
+    # 'Q1p': {'amp': (0, 1), 'center': (exp.t_exp/2.5,exp.t_exp/1.5) , 'std': (exp.t_exp/7.5, exp.t_exp/4.5)},
+    # 'Q2p': {'amp': (0, 1), 'center': (exp.t_exp/2.5,exp.t_exp/1.5) , 'std': (exp.t_exp/7.5, exp.t_exp/4.5)},
+    'CPHASE': {'ratio': (0, 1), 'w12': (5*np.pi*2, 6*np.pi*2)}
 }
 
+
 flattened_bounds = flatten_dict(nested_bounds)
+
+
+bounds_transformer = SequentialDomainReductionTransformer(minimum_window=0.5)
 
 optimizer = BayesianOptimization(
     f=objective,
     pbounds=flattened_bounds,
     random_state=1,
+    bounds_transformer=bounds_transformer
 )
 
 # Step 4: Access the scores and iteration index
@@ -85,7 +98,7 @@ scores = []
 optimizer.maximize(
     init_points=init_points, #300 was better for both of these
     n_iter=iterations,
-    acquisition_function= UtilityFunction(kind = 'ei')
+    # acquisition_function= UtilityFunction(kind = 'ei')
 )
 
 target_vals = [res.get('target') for res in optimizer.res]

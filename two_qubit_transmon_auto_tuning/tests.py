@@ -50,10 +50,10 @@ exp = Experiment(
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    # t_exp  = 1000, #CPHASE
-    t_exp = 81, #X
+    t_exp  = 1000, #CPHASE
+    # t_exp = 81, #X
 
-    gate_type = 'XCphase',
+    gate_type = 'Cphase',
 
     drive_shape = 'Gaussian')
 
@@ -64,7 +64,7 @@ kwargs = {'I1p':
                 'std': exp.t_exp/6},
           'Q1p':
               # {'amp': 151.2, #X
-                { 'amp': 50,
+                { 'amp': 0,
                'center': exp.t_exp / 2,
                'std': exp.t_exp / 6},
           'I2p':
@@ -81,10 +81,12 @@ kwargs = {'I1p':
           # 'drive': 'Q',
 
           'CPHASE': {
-          'ratio': 0.7676,
+          # 'ratio': 0.7676,
           # 'ratio': 0.9979,
-          'w12': exp.qubits[0].w_ex12
+          'ratio':0.592,                #GIVES 0.9999 FIDELITY
+          # 'w12': exp.qubits[0].w_ex12
           # 'w12': 32.47
+          'w12':33.68                   #GIVES 0.9999 FIDELITY
           }
 
           }
@@ -103,8 +105,8 @@ if exp.gate_type == 'Cphase':
                          [0, 0, 0, -1]])
     U_rho_Cphase = spre(U_psi_Cphase) * spost(U_psi_Cphase.dag())
     chi_ideal_Cphase = qpt(U_rho_Cphase, op_basis)
-    fig2 = qpt_plot_combined(qpt(U_rho_Cphase, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
-    plt.show()
+    # fig2 = qpt_plot_combined(qpt(U_rho_Cphase, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
+    # plt.show()
 else:
     x = exp.fidelity_X(**kwargs)
     U_psi_X = tensor(sigmax(), qeye(2))
@@ -128,7 +130,6 @@ kwargs_drag = {
     'lamb': 0.75,
     'alpha': 1
 }
-
 
 # %% Checking Gaussian shape
 # times = np.linspace(0,1000,400)
