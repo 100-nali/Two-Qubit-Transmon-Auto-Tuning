@@ -36,16 +36,16 @@ exp = Experiment(
     a_q = -0.3 * 2 * np.pi,
     r = 0.01 * 2 * np.pi,
     w_d = 5 * 2 * np.pi,
-    w_ex12=5 * 2 * np.pi)
+    w_ex12=5.3 * 2 * np.pi)
     ],
 
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    # t_exp  = 1000, #CPHASE
-    t_exp = 81, #X
+    t_exp  = 1000, #CPHASE
+    # t_exp = 81, #X
 
-    gate_type = 'notCphase',
+    gate_type = 'Cphase',
 
     drive_shape = 'Gaussian')
 
@@ -54,19 +54,20 @@ exp = Experiment(
 
 # iterations = 300
 # init_points = 300
-iterations = 15
-init_points = 10
+iterations = 10
+init_points = 20
 
 #%% Define objective function -> gate fidelity as a function of the drives.
-objective = exp.fidelity_X
+objective = exp.fidelity_Cphase
 
 #%% Bayesian Optimization
 
 nested_bounds = {
-    'I1p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'I2p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'Q1p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
-    'Q2p': {'amp': (0, 100), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)}
+    'I1p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'I2p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'Q1p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'Q2p': {'amp': (0, 0), 'center': (exp.t_exp/2,exp.t_exp/2) , 'std': (exp.t_exp/6, exp.t_exp/6)},
+    'CPHASE': {'ratio': (0.2, 0.8), 'w12': (5.2*np.pi*2, 5.4*np.pi*2)}
 }
 
 flattened_bounds = flatten_dict(nested_bounds)

@@ -1,20 +1,16 @@
 #Imports
 import numpy as np
 from qutip import *
-import scipy.linalg as la
 import matplotlib.pyplot as plt
-import itertools
-from dataclasses import dataclass
-import math
-from functools import partial
 
 #%% Function that returns the 2-dim operational basis
 def operational_basis(dim):
     if dim == 2:
         return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
 
-# %%  Define global variables (constants)
-# Define dim
+# %%  Define global constants
+
+# Define dim (number of energy levels per qubit)
 dim = 3
 
 # Define a1, a2
@@ -185,7 +181,28 @@ class Qubit:
 
     def set_wq(self, wq_update):
         self.w_q = wq_update
+
+
 #%%
+def virtual_Z_cphase(U):
+    diags = np.diag(U, k = 0)
+    phi =  np.angle(diags)
+
+    Z1 = Qobj([[1, 0, 0, 0],
+              [0, 1, 0, 0],
+              [0, 0, np.exp(-1j * phi[2]), 0],
+              [0, 0, 0, np.exp(-1j * phi[2])]])
+
+    Z2 =  Qobj([[1, 0, 0, 0],
+              [0, np.exp(-1j * phi[1]), 0, 0],
+              [0, 0, 1, 0],
+              [0, 0, 0, np.exp(-1j * phi[1])]])
+
+    #After applying virtual Z gates
+    U_c = Z2*Z1*U
+
+    return U_c
+
 #%% Class that defines the experiment
 class Experiment:
     def __init__(self, qubits, g, t_exp, gate_type, drive_shape):
@@ -202,8 +219,8 @@ class Experiment:
         d1, d2 = drives
 
         ## if gate type is Cphase, make wq a fn of time (flux tuning).
-        w1_set = self.Cphase(args)
         if self.gate_type == 'Cphase':
+            w1_set = self.Cphase(args)
             q1.set_wq(w1_set)
 
         # Autonomous
@@ -263,8 +280,9 @@ class Experiment:
         Q1_p = params['Q1p']
         I2_p = params['I2p']
         Q2_p = params['Q2p']
+        args_cphase = params['CPHASE']
 
-        #Set the 2 drives/qubit based on the drive_shape argument specified
+        #Set the 2 drives per qubit based on the drive_shape argument specified
         drive_1 = Drive(
             I=drive_shape(self.drive_shape, **I1_p),
             Q=drive_shape(self.drive_shape,**Q1_p)
@@ -276,33 +294,27 @@ class Experiment:
         )
 
         drives = [drive_1, drive_2]
-        #%%
+
+        #Define time-stamps
         nT: int = 100
         times = np.linspace(0, self.t_exp, nT)
-        # tau_ratios = np.linspace(0,1,100) #Initially, was iterating to find the best tau_ratio.
 
-        #Choose the proportion of experiment time to stay at |11> to |20> transition frequency
-        tau_ratios = [0.7676767676767677]
-        U33_angles = []
-        for tau_ratio in tau_ratios:
-            H = self.create_H(drives, args = {'tau_ratio': tau_ratio, 't0': 0}) #H is a lambda function of time.
-            U_psi_real = qutip.propagator(H, times)
-            np.set_printoptions(precision=1)
+        #Choose the proportion of experiment time to stay at |11> to |20> transition frequency]
+        H =  self.create_H(drives, args_cphase)
+        U_psi_real = qutip.propagator(H, times)
+        np.set_printoptions(precision=1)
 
-            #Take entry at last time step
-            U_psi_real_T = U_psi_real[nT - 1]
+        #Take entry at last time step
+        U_psi_real_T = U_psi_real[nT - 1]
 
-            #Eliminate rows/columns corresponding to |2> state.
-            rows = [0,1,3,4]
-            cols = [0,1,3,4]
-            U_psi_real_T = (Qobj((U_psi_real_T[rows][:,cols])))
+        #Eliminate rows/columns corresponding to |2> state.
+        rows = [0,1,3,4]
+        cols = [0,1,3,4]
+        U_psi_real_T = (Qobj((U_psi_real_T[rows][: , cols])))
 
-            #Print out relative angle of last diagonal element
-            phis = np.angle([ U_psi_real_T[1,1],  U_psi_real_T[2,2],  U_psi_real_T[3,3]], deg = True)
-            U33_angle = phis[2] - phis[1] - phis[0]
-            U33_angles.append(U33_angle)
-            # print(U33_angle)
-        # print(U33_angles)
+        # IF CPHASE: Apply Virtual Z Gate
+        if self.gate_type == 'Cphase':
+            U_psi_real_T = virtual_Z_cphase(U_psi_real_T)
 
         #Convert U from state vector to density matrix form
         U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
@@ -312,8 +324,11 @@ class Experiment:
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
         #Plot the chi matrix of the process
-        self.plot_qpt(chi_real, 'Unknown Process', isplot = False)
-        return [chi_real,U_psi_real_T]  # the *16 term comes from the newly defined op_basis
+        self.plot_qpt(chi_real, 'Unknown Process', isplot = True)
+
+        #Return chi and U for the simulation
+        variables = {"chi": chi_real, "U": U_psi_real_T}
+        return variables
 
     #%% QPT Plotting function
     def plot_qpt(self, chi, title, isplot):
@@ -331,6 +346,7 @@ class Experiment:
         Q1_p = params['Q1_p']
         I2_p = params['I2_p']
         Q2_p = params['Q2_p']
+        args_cphase = params['CPHASE']
 
         drive_1 = Drive(
             I=drive_shape(self.drive_shape, **I1_p),
@@ -368,7 +384,8 @@ class Experiment:
             psi0 = tensor(basis(3,0), basis(3,0))
 
             # create H
-            H = self.create_H(drives, args = {'tau_ratio': 0.7676, 't0': 0})
+            # H = self.create_H(drives, args = {'tau_ratio': 0.7676, 't0': 0})
+            H = self.create_H(drives, args_cphase)
 
             # input to mesolve
             res = mesolve(H, psi0, times, [], [sigma_x1, sigma_y1, sigma_z1, sigma_x2, sigma_y2, sigma_z2, n1, n2])
@@ -386,16 +403,16 @@ class Experiment:
         ax.legend()
         plt.show()
 #%% The Cphase function - sets qubit_1 frequency as a function of time, if gate is on.
-    #Frequency decreases linearly, stays constant for some time, then increases linearly back to the intrinsic frequency.
+# Frequency decreases linearly, stays constant for some time, then increases linearly back to the intrinsic frequency.
     def Cphase(self, args):
         exp = self
         on = exp.gate_type == 'Cphase'
         q1, q2 = exp.qubits
-        t0 = args['t0']
-        tau = args['tau_ratio'] * exp.t_exp
+        t0 = 0
+        tau = args['ratio'] * exp.t_exp
         t_tune = 0.5 * (exp.t_exp - tau)
         y0 = q1.w_q_def
-        y_max = q1.w_ex12
+        y_max = args['w12']
 
         if on is True:
             w1_set = LinearFluxTuning(
@@ -405,12 +422,6 @@ class Experiment:
                 y_max = y_max,
                 tau = tau
             )
-            # w1_set = SquareFluxTuning(
-            #     t0 = t0,
-            #     y0 = y0,
-            #     t_stop =exp.t_exp,
-            #     y_max = y_max
-            # )
             return w1_set
 #%%
     def fidelity_CNOT(self, **kwargs):
@@ -420,7 +431,7 @@ class Experiment:
                            [0, 0, 1, 0]])
         U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
         chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
-        chi_real = self.simulate_qpt(**kwargs)
+        chi_real = self.simulate_qpt(**kwargs)['chi']
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_CNOT), Qobj(chi_real))
@@ -433,8 +444,8 @@ class Experiment:
                            [0, 0, 0, -1]])
         U_rho_Cphase = spre(U_psi_Cphase) * spost(U_psi_Cphase.dag())
         chi_ideal_Cphase = qpt(U_rho_Cphase, op_basis)
-        vars= self.simulate_qpt(**kwargs)
-        chi_real, U = vars
+        variables= self.simulate_qpt(**kwargs)
+        chi_real = variables['chi']
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_Cphase), Qobj(chi_real))
@@ -448,8 +459,7 @@ class Experiment:
         U_psi_X = tensor(sigmax(), qeye(2))
         U_rho_X = spre(U_psi_X) * spost(U_psi_X.dag())
         chi_ideal_X = qpt(U_rho_X, op_basis)
-        vars = self.simulate_qpt(**kwargs)
-        chi_real, U = vars
+        chi_real = self.simulate_qpt(**kwargs)['chi']
         # %% Evaluate process fidelity  ###########################
         fidelity = process_fidelity(Qobj(chi_ideal_X), Qobj(chi_real))
         # return [fidelity,U]
@@ -460,7 +470,7 @@ class Experiment:
         U_psi_Y = tensor(sigma_y, qeye(2))
         U_rho_Y = spre(U_psi_Y) * spost(U_psi_Y.dag())
         chi_ideal_Y = qpt(U_rho_Y, op_basis)
-        chi_real = self.simulate_qpt(**kwargs)
+        chi_real = self.simulate_qpt(**kwargs)['chi']
 
         # %% Evaluate process fidelity  ###########################
         fidelity = process_fidelity(Qobj(chi_ideal_Y), Qobj(chi_real))
@@ -470,7 +480,7 @@ class Experiment:
         U_psi_Y_90 = tensor(Qobj([[1 / np.sqrt(2), 1 / np.sqrt(2)], [-1 / np.sqrt(2), 1 / np.sqrt(2)]]), qeye(2))
         U_rho_Y_90 = spre(U_psi_Y_90) * spost(U_psi_Y_90.dag())
         chi_ideal_Y_90 = qpt(U_rho_Y_90, op_basis)
-        chi_real = self.simulate_qpt(**kwargs)
+        chi_real = self.simulate_qpt(**kwargs)['chi']
 
         # %% Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_Y_90), Qobj(chi_real))
@@ -480,7 +490,7 @@ class Experiment:
         U_psi_H = tensor(Qobj([[1 / np.sqrt(2), 1 / np.sqrt(2)], [1 / np.sqrt(2), -1 / np.sqrt(2)]]), qeye(2))
         U_rho_H = spre(U_psi_H) * spost(U_psi_H.dag())
         chi_ideal_H = qpt(U_rho_H, op_basis)
-        chi_real = self.simulate_qpt( **kwargs)
+        chi_real = self.simulate_qpt( **kwargs)['chi']
 
         # %% Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_H), Qobj(chi_real))
@@ -500,7 +510,7 @@ class Experiment:
         U_psi_iSWAP = U_psi_SWAP * U_psi_i
         U_rho_iSWAP = spre(U_psi_iSWAP) * spost(U_psi_iSWAP.dag())
         chi_ideal_iSWAP = qpt(U_rho_iSWAP, op_basis)
-        chi_real = self.simulate_qpt(**kwargs)
+        chi_real = self.simulate_qpt(**kwargs)['chi']
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_iSWAP), Qobj(chi_real))
@@ -514,7 +524,7 @@ class Experiment:
                          [0, 0, 0, -1]])
         U_rho_CZ = spre(U_psi_CZ) * spost(U_psi_CZ.dag())
         chi_ideal_CZ = qpt(U_rho_CZ, op_basis)
-        chi_real = self.simulate_qpt( **kwargs)
+        chi_real = self.simulate_qpt(**kwargs)['chi']
 
         # Evaluate process fidelity
         fidelity = process_fidelity(Qobj(chi_ideal_CZ), Qobj(chi_real))

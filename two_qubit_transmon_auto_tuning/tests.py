@@ -53,7 +53,7 @@ exp = Experiment(
     # t_exp  = 1000, #CPHASE
     t_exp = 81, #X
 
-    gate_type = 'notCphase',
+    gate_type = 'XCphase',
 
     drive_shape = 'Gaussian')
 
@@ -78,23 +78,25 @@ kwargs = {'I1p':
                 'center': exp.t_exp/2,
                 'std': exp.t_exp/6},
 
-          # 'drive': 'Q'
+          # 'drive': 'Q',
+
+          'CPHASE': {
+          'ratio': 0.7676,
+          # 'ratio': 0.9979,
+          'w12': exp.qubits[0].w_ex12
+          # 'w12': 32.47
           }
+
+          }
+
 
 #%% Do the flattening
 kwargs = flatten_dict(kwargs)
 #%%
 
-#
 if exp.gate_type == 'Cphase':
-    # x = exp.fidelity_Cphase(**kwargs)
+    x = exp.fidelity_Cphase(**kwargs)
     np.set_printoptions(precision=3, suppress=True)
-    # fid, U = x
-    U = exp.simulate_qpt(**kwargs)
-    U = virtual_Z_cphase(U)
-    U = spre(U) * spost(U.dag())
-    fig = qpt_plot_combined(qpt(U, op_basis), [["i", "x", "y", "z"]] * 2, "sim")
-    plt.show()
     U_psi_Cphase = Qobj([[1, 0, 0, 0],
                          [0, 1, 0, 0],
                          [0, 0, 1, 0],
@@ -104,21 +106,15 @@ if exp.gate_type == 'Cphase':
     fig2 = qpt_plot_combined(qpt(U_rho_Cphase, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
     plt.show()
 else:
-    # x = exp.fidelity_X(**kwargs)
-    # fid, U = x
-    U = exp.simulate_qpt(**kwargs)
-    U = spre(U) * spost(U.dag())
-    fig = qpt_plot_combined(qpt(U, op_basis), [["i", "x", "y", "z"]] * 2, "sim")
-    plt.show()
+    x = exp.fidelity_X(**kwargs)
     U_psi_X = tensor(sigmax(), qeye(2))
     U_rho_X = spre(U_psi_X) * spost(U_psi_X.dag())
     chi_ideal_X = qpt(U_rho_X, op_basis)
     fig2 = qpt_plot_combined(qpt(U_rho_X, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
     plt.show()
 
-
-
 #%% Power rabi
+
 # exp.power_rabi(**kwargs)
 
 #%% Testing DRAG
@@ -132,7 +128,7 @@ kwargs_drag = {
     'lamb': 0.75,
     'alpha': 1
 }
-#
+
 
 # %% Checking Gaussian shape
 # times = np.linspace(0,1000,400)
