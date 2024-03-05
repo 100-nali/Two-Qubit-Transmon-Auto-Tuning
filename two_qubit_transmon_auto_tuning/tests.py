@@ -105,8 +105,8 @@ if exp.gate_type == 'Cphase':
                          [0, 0, 0, -1]])
     U_rho_Cphase = spre(U_psi_Cphase) * spost(U_psi_Cphase.dag())
     chi_ideal_Cphase = qpt(U_rho_Cphase, op_basis)
-    # fig2 = qpt_plot_combined(qpt(U_rho_Cphase, op_basis), [["i", "x", "y", "z"]] * 2, "ideal")
-    # plt.show()
+    fig2 = qpt_plot_combined(chi_ideal_Cphase, [["i", "x", "y", "z"]] * 2, "ideal")
+    plt.show()
 else:
     x = exp.fidelity_X(**kwargs)
     U_psi_X = tensor(sigmax(), qeye(2))

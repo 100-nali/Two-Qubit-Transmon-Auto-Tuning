@@ -6,18 +6,6 @@ from bayes_opt.util import UtilityFunction
 from fidelity_function import *
 from functools import partial
 
-
-
-#%% Notes
-"""
-Choose a single-pulse gate.
-Assume Gaussian envelope.
-Assume time of measurement is fixed.
-Optimizing over one general parameter: Amplitude.
-i.e., total number of parameters to optimize over = 4.
-
-"""
-
 #%% Define parameters
 exp = Experiment(
     [Qubit(
@@ -40,7 +28,7 @@ exp = Experiment(
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    t_exp  = 1000, #CPHASE
+    t_exp  = 800, #CPHASE
     # t_exp = 81, #X
 
     gate_type = 'Cphase',
@@ -52,8 +40,8 @@ exp = Experiment(
 
 # iterations = 300
 # init_points = 300
-iterations = 20
-init_points = 20
+# iterations = 30
+# init_points = 10
 
 #%% Define objective function -> gate fidelity as a function of the drives.
 objective = exp.fidelity_Cphase
@@ -78,30 +66,119 @@ nested_bounds = {
     'CPHASE': {'ratio': (0, 1), 'w12': (5*np.pi*2, 6*np.pi*2)}
 }
 
-
 flattened_bounds = flatten_dict(nested_bounds)
 
+# bounds_transformer = SequentialDomainReductionTransformer(minimum_window=0.5)
 
-bounds_transformer = SequentialDomainReductionTransformer(minimum_window=0.5)
+def hyperparameter_objective(acquisition_weight, num_iterations, num_init_points, alpha):
+
+    utility_function = UtilityFunction(kind='ei', kappa=acquisition_weight)
+
+    optimizer = BayesianOptimization(
+        f=objective,
+        pbounds=flattened_bounds,
+        random_state=1,
+        verbose = 0,
+        # bounds_transformer=bounds_transformer,
+        allow_duplicate_points = True
+    )
+
+    gp_params = {
+        'alpha': alpha
+    }
+
+    optimizer.set_gp_params(**gp_params)
+
+    optimizer.maximize(
+        init_points= int(num_init_points),
+        n_iter= int(num_iterations),
+        acquisition_function= utility_function,
+    )
+
+    return optimizer.max['target']
+
+# Hyperparameter tuning ranges
+hyperparameter_bounds = {
+    'acquisition_weight': (1, 10),
+    'num_iterations': (10, 30),
+    'num_init_points': (5, 20),
+    'alpha': (1e-5, 1e-1)
+}
+
+# Create the hyperparameter tuning optimizer
+hyperparameter_optimizer = BayesianOptimization(
+    f=hyperparameter_objective,
+    pbounds=hyperparameter_bounds,
+    random_state=1
+)
+
+# Run hyperparameter tuning
+hyperparameter_optimizer.maximize(
+    init_points=5,
+    n_iter=10
+)
+
+# Get the best hyperparameters
+best_hyperparameters = hyperparameter_optimizer.max
+
+# Use the best hyperparameters for the main Bayesian optimization
+acquisition_weight = best_hyperparameters['params']['acquisition_weight']
+iterations = int(best_hyperparameters['params']['num_iterations'])
+init_points = int(best_hyperparameters['params']['num_init_points'])
+alpha = best_hyperparameters['params']['alpha']
+
 
 optimizer = BayesianOptimization(
-    f=objective,
+    f = objective,
     pbounds=flattened_bounds,
     random_state=1,
-    bounds_transformer=bounds_transformer
+    # bounds_transformer=bounds_transformer,
+    allow_duplicate_points=True
 )
+
+# standard_optimizer = BayesianOptimization(
+#     f = objective,
+#     pbounds=flattened_bounds,
+#     # verbose=0,
+#     random_state=1,
+# )
 
 # Step 4: Access the scores and iteration index
-iteration_index = []
-scores = []
+
+gp_params = {'alpha': alpha}
+
+optimizer.set_gp_params(**gp_params)
+
+utility_function = UtilityFunction(kind = 'ei', kappa = acquisition_weight)
 
 optimizer.maximize(
-    init_points=init_points, #300 was better for both of these
+    init_points=init_points,
     n_iter=iterations,
-    # acquisition_function= UtilityFunction(kind = 'ei')
+    # kappa=acquisition_weight
+    acquisition_function= utility_function
 )
 
+# standard_optimizer.maximize(
+#     init_points=init_points,
+#     n_iter=iterations,
+# )
+
+plt.plot(optimizer.space.target, label='Mutated Optimizer')
+# plt.plot(standard_optimizer.space.target, label='Standard Optimizer')
+# plt.legend()
+
+
+iteration_index = []
+scores = []
 target_vals = [res.get('target') for res in optimizer.res]
+plt.figure()
+plt.plot(target_vals)
+plt.show()
+
+
+iteration_index = []
+scores = []
+target_vals = [res.get('target') for res in hyperparameter_optimizer.res]
 plt.figure()
 plt.plot(target_vals)
 plt.show()

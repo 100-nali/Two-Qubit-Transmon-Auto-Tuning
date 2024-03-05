@@ -224,7 +224,7 @@ ax.set_xlabel('Amplitude')
 ax.set_ylabel('Expectation value')
 ax.set_title('Power Rabi Oscillations')
 ax.legend()
-plt.show()
+# plt.show()
 
 
 # %% QPT over unknown quantum process  ###########################
@@ -271,8 +271,8 @@ U_psi_cphase = Qobj([[1, 0, 0, 0],
 U_rho_cphase = spre(U_psi_cphase) * spost(U_psi_cphase.dag())
 chi_ideal_cphase = qpt(U_rho_cphase, op_basis)
 
-# fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
-# plt.show()
+fig = qpt_plot_combined(chi_ideal_cphase, op_label, r'$CPHASE')
+plt.show()
 
 
 #%% X Gate  ###########################
@@ -286,7 +286,7 @@ U_psi_CNOT = tensor(sigmax(),qeye(2))
 U_rho_CNOT = spre(U_psi_CNOT) * spost(U_psi_CNOT.dag())
 chi_ideal_CNOT = qpt(U_rho_CNOT, op_basis)
 fig = qpt_plot_combined(chi_ideal_CNOT, op_label, r'$CPHASE')
-plt.show()
+# plt.show()
 
 
 #%% Evaluate process fidelity  ###########################
