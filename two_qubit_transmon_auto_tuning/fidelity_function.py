@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 #%% Function that returns the 2-dim operational basis
 def operational_basis(dim):
     if dim == 2:
-        return [[sigmax(), sigmay(), sigmaz(), qeye(2)]]*2
+        return [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
 
 # %%  Define global constants
 
@@ -324,7 +324,7 @@ class Experiment:
         chi_real = qpt(Qobj(U_rho_real), op_basis)
 
         #Plot the chi matrix of the process
-        self.plot_qpt(chi_real, 'Unknown Process', isplot = True)
+        self.plot_qpt(chi_real, 'Unknown Process', isplot = False)
 
         #Return chi and U for the simulation
         variables = {"chi": chi_real, "U": U_psi_real_T}

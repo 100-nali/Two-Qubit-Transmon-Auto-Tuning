@@ -1,0 +1,5 @@
+{'target': 0.9996295886012049,
+ 'params': {'acquisition_weight': 4.753198042323167,
+  'alpha': 0.07203524609928139,
+  'num_init_points': 5.001715622260173,
+  'num_iterations': 16.046651452636794}}
