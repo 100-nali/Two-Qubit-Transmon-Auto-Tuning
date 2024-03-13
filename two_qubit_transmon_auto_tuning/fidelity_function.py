@@ -11,7 +11,8 @@ def operational_basis(dim):
 # %%  Define global constants
 
 # Define dim (number of energy levels per qubit)
-dim = 3
+# dim = 3
+dim = 2 #spin qubits
 
 # Define a1, a2
 a1 = tensor(destroy(dim), qeye(dim))
@@ -172,7 +173,7 @@ class Drive:
 class Qubit:
     def __init__(self, i, w_q, a_q, r, w_d, w_ex12):
         self.i = i              #index
-        self.w_q = w_q          #qubit freq
+        self.w_q = w_q          #qubit freq (for spin-qubits, let this represent mu*B*g)
         self.w_q_def = w_q      #default qubit frequency
         self.a_q = a_q          #anharmonicity
         self.r = r              #drive coupling
@@ -212,64 +213,91 @@ class Experiment:
         self.gate_type = gate_type
         self.drive_shape = drive_shape
 
-#%% Hamiltonian-creating function
+#%% Hamiltonian-creating function (FOR SPIN QUBITS)
+
     def create_H(self, drives, args):
         qubits = self.qubits
         q1, q2 = qubits
         d1, d2 = drives
+        mu_B_g1 = q1.w_q
+        mu_B_g2 = q2.w_q
+        v1 = 0.5
+        v2 = 0.5
 
-        ## if gate type is Cphase, make wq a fn of time (flux tuning).
-        if self.gate_type == 'Cphase':
-            w1_set = self.Cphase(args)
-            q1.set_wq(w1_set)
+        #Drift
 
-        # Autonomous
-        if type(q1.w_q) != float:
-            H_01 = [n1, q1.w_q]
-        else:
-            H_01 = n1 * q1.w_q
-        if type(q2.w_q) != float:
-            H_02 = [n2, q2.w_q]
-        else:
-            H_02 = n2 * q2.w_q
+        #Part without spiin-orbit coupling
+        H0_1 = 0.5*( mu_B_g1* tensor(sigmaz(), qeye(2)) +  mu_B_g2 * tensor(qeye(2), sigmaz()))
 
-        H_0d1 = -n1 * q1.w_d
-        H_0d2 = -n2 * q2.w_d
+        #Drive
+        H_d1_I = [v1*tensor(sigmax(), qeye(2)) + v2* tensor(qeye(2), sigmax()) , lambda t, args: d1.I(t)]
+        H_d1_Q = [v1 * tensor(sigmay(), qeye(2)) + v2 * tensor(qeye(2), sigmay()), lambda t, args: d1.Q(t)]
 
-        if dim == 3:
-            H_0 = 0.5 * ((q1.a_q * a1.dag() * a1.dag() * a1 * a1) + (q2.a_q * a2.dag() * a2.dag() * a2 * a2))
-        else:
-            H_0 = np.zeros(n1.shape)
+        H_d2_I = [v1 * tensor(sigmax(), qeye(2)) + v2 * tensor(qeye(2), sigmax()), lambda t, args:d2.I(t)]
+        H_d2_Q = [v1 * tensor(sigmay(), qeye(2)) + v2 * tensor(qeye(2), sigmay()), lambda t, args:d2.Q(t)]
 
-        # Drive terms
-        if type(d1.I) != float:
-            H_d1_0b = [-0.5 * q1.r * 1j * (a1 - a1.dag()), lambda t, args: d1.I(t)]
-        else:
-            H_d1_0b = -0.5 * q1.r * 1j * (a1 - a1.dag()) * d1.I
 
-        if type(d1.Q) != float:
-            H_d1_0a = [-0.5 * q1.r * (a1 + a1.dag()), lambda t, args: d1.Q(t)]
-        else:
-            H_d1_0a = -0.5 * q1.r * (a1 + a1.dag()) * d1.Q
-
-        if type(d2.I) != float:
-            H_d2_0b = [-0.5*1j * q2.r * (a2 - a2.dag()), lambda t, args: d2.I(t)]
-        else:
-            H_d2_0b = -0.5*1j * q2.r * (a2 - a2.dag()) * d2.I
-
-        if type(d2.Q) != float:
-            H_d2_0a = [-0.5 * q2.r * (a2 + a2.dag()), lambda t, args: d2.Q(t)]
-        else:
-            H_d2_0a = -0.5 * q2.r * (a2 + a2.dag()) * d2.Q
-
-        delta_d = q1.w_d - q2.w_d
-        H_d1_1 = [a1 * a2.dag(), lambda t, args: self.g * np.exp(-1j * delta_d * t)]
-        H_d2_1 = [a1.dag() * a2, lambda t, args: self.g * np.exp(1j * delta_d * t)]
-
-        # Total H
-        H = [H_0, H_01, H_02, H_0d1, H_0d2, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
-
+        H = [H0_1,  H_d1_I,  H_d1_Q,  H_d2_I, H_d2_Q]
         return H
+
+    #FOR SUPERCONDUCTING QUBITS:
+    # def create_H(self, drives, args):
+    #     qubits = self.qubits
+    #     q1, q2 = qubits
+    #     d1, d2 = drives
+    #
+    #     ## if gate type is Cphase, make wq a fn of time (flux tuning).
+    #     if self.gate_type == 'Cphase':
+    #         w1_set = self.Cphase(args)
+    #         q1.set_wq(w1_set)
+    #
+    #     # Autonomous
+    #     if type(q1.w_q) != float:
+    #         H_01 = [n1, q1.w_q]
+    #     else:
+    #         H_01 = n1 * q1.w_q
+    #     if type(q2.w_q) != float:
+    #         H_02 = [n2, q2.w_q]
+    #     else:
+    #         H_02 = n2 * q2.w_q
+    #
+    #     H_0d1 = -n1 * q1.w_d
+    #     H_0d2 = -n2 * q2.w_d
+    #
+    #     if dim == 3:
+    #         H_0 = 0.5 * ((q1.a_q * a1.dag() * a1.dag() * a1 * a1) + (q2.a_q * a2.dag() * a2.dag() * a2 * a2))
+    #     else:
+    #         H_0 = np.zeros(n1.shape)
+    #
+    #     # Drive terms
+    #     if type(d1.I) != float:
+    #         H_d1_0b = [-0.5 * q1.r * 1j * (a1 - a1.dag()), lambda t, args: d1.I(t)]
+    #     else:
+    #         H_d1_0b = -0.5 * q1.r * 1j * (a1 - a1.dag()) * d1.I
+    #
+    #     if type(d1.Q) != float:
+    #         H_d1_0a = [-0.5 * q1.r * (a1 + a1.dag()), lambda t, args: d1.Q(t)]
+    #     else:
+    #         H_d1_0a = -0.5 * q1.r * (a1 + a1.dag()) * d1.Q
+    #
+    #     if type(d2.I) != float:
+    #         H_d2_0b = [-0.5*1j * q2.r * (a2 - a2.dag()), lambda t, args: d2.I(t)]
+    #     else:
+    #         H_d2_0b = -0.5*1j * q2.r * (a2 - a2.dag()) * d2.I
+    #
+    #     if type(d2.Q) != float:
+    #         H_d2_0a = [-0.5 * q2.r * (a2 + a2.dag()), lambda t, args: d2.Q(t)]
+    #     else:
+    #         H_d2_0a = -0.5 * q2.r * (a2 + a2.dag()) * d2.Q
+    #
+    #     delta_d = q1.w_d - q2.w_d
+    #     H_d1_1 = [a1 * a2.dag(), lambda t, args: self.g * np.exp(-1j * delta_d * t)]
+    #     H_d2_1 = [a1.dag() * a2, lambda t, args: self.g * np.exp(1j * delta_d * t)]
+    #
+    #     # Total H
+    #     H = [H_0, H_01, H_02, H_0d1, H_0d2, H_d1_0a, H_d1_0b, H_d2_0a, H_d2_0b, H_d1_1, H_d2_1]
+    #
+    #     return H
 
     #%% Simulate quantum process tomography for an 'unknown' (driven) process
     def simulate_qpt(self, **kwargs_flattened):
@@ -310,7 +338,7 @@ class Experiment:
         #Eliminate rows/columns corresponding to |2> state.
         rows = [0,1,3,4]
         cols = [0,1,3,4]
-        U_psi_real_T = (Qobj((U_psi_real_T[rows][: , cols])))
+        # U_psi_real_T = (Qobj((U_psi_real_T[rows][: , cols])))
 
         # IF CPHASE: Apply Virtual Z Gate
         if self.gate_type == 'Cphase':

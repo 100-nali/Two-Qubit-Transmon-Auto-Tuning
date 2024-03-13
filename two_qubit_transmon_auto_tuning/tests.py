@@ -32,7 +32,7 @@ def virtual_Z_cphase(U):
 exp = Experiment(
     [Qubit(
     i = 1,
-    w_q = 6 * 2 * np.pi,
+    w_q = 6 * 2 * np.pi, #GHz
     a_q = -0.3 * 2 * np.pi,
     r = 0.01 * 2 * np.pi,
     w_d = 6 * 2 * np.pi,
@@ -50,10 +50,10 @@ exp = Experiment(
     g = 0.005 * 2 * np.pi, ### ? 20MHz for optimal trajectory?
 
     # t_exp = 64,
-    t_exp  = 1000, #CPHASE
-    # t_exp = 81, #X
+    # t_exp  = 1000, #CPHASE
+    t_exp = 81, #X
 
-    gate_type = 'Cphase',
+    gate_type = 'XCphase',
 
     drive_shape = 'Gaussian')
 
