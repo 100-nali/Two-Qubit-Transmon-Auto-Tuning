@@ -184,34 +184,65 @@ class Qubit:
         self.w_q = wq_update
 
 
-#%%
-def virtual_Z_cphase(U):
-    diags = np.diag(U, k = 0)
-    phi =  np.angle(diags)
+#%% TODO add virtual gate for 2dim system (spin qubits)
+def virtual_Z_cphase(U, dim):
+    if dim == 3:
+        diags = np.diag(U, k = 0)
+        phi =  np.angle(diags)
 
-    Z1 = Qobj([[1, 0, 0, 0],
-              [0, 1, 0, 0],
-              [0, 0, np.exp(-1j * phi[2]), 0],
-              [0, 0, 0, np.exp(-1j * phi[2])]])
+        Z1 = Qobj([[1, 0, 0, 0],
+                  [0, 1, 0, 0],
+                  [0, 0, np.exp(-1j * phi[2]), 0],
+                  [0, 0, 0, np.exp(-1j * phi[2])]])
 
-    Z2 =  Qobj([[1, 0, 0, 0],
-              [0, np.exp(-1j * phi[1]), 0, 0],
-              [0, 0, 1, 0],
-              [0, 0, 0, np.exp(-1j * phi[1])]])
+        Z2 =  Qobj([[1, 0, 0, 0],
+                  [0, np.exp(-1j * phi[1]), 0, 0],
+                  [0, 0, 1, 0],
+                  [0, 0, 0, np.exp(-1j * phi[1])]])
 
-    #After applying virtual Z gates
-    U_c = Z2*Z1*U
+        #After applying virtual Z gates
+        U_c = Z2*Z1*U
 
-    return U_c
+        return U_c
+    elif dim == 2:
+        return U
+
+def Pauli_decomp(H):
+    targets = np.zeros((4,4))
+    for i,sig1 in enumerate([qeye(2), sigmax(), sigmay(), sigmaz()]):
+        for j,sig2 in enumerate([qeye(2), sigmax(), sigmay(), sigmaz()]):
+            sig12 = tensor(sig1, sig2)
+            decomp = sig12 * H
+            target = np.real(decomp.tr())
+            targets[i][j] = (target)
+    np.set_printoptions(precision=3, suppress=True)
+    print(targets)
+    targets = Qobj(targets)
+
+    op_label = ["i", "x", "y", "z"]
+
+    fig, ax = matrix_histogram(targets, op_label, op_label, title='Pauli Decomposition of (Drift) Hamiltonian')
+    ax.view_init(azim=-55, elev=45)
+    plt.show()
+
 
 #%% Class that defines the experiment
 class Experiment:
-    def __init__(self, qubits, g, t_exp, gate_type, drive_shape):
+    def __init__(self, qubits, g, t_exp, gate_type, drive_shape,R, Uo, eps, tc):
         self.qubits = qubits
         self.g = g
         self.t_exp = t_exp
         self.gate_type = gate_type
         self.drive_shape = drive_shape
+        #Spin qubit addition
+        self.R = R
+        self.eps = eps
+        self.tc = tc
+        self.Uo = Uo
+
+    def compute_Jo(self):
+        Jo = -0.5* (self.Uo - self.eps) * ( 1 - np.sqrt(1 + 8* (self.tc/(self.Uo-self.eps))**2))
+        return Jo
 
 #%% Hamiltonian-creating function (FOR SPIN QUBITS)
 
@@ -224,10 +255,21 @@ class Experiment:
         v1 = 0.5
         v2 = 0.5
 
+        Jo = self.compute_Jo()
+        J = np.multiply(Jo, self.R)
+
         #Drift
 
         #Part without spiin-orbit coupling
         H0_1 = 0.5*( mu_B_g1* tensor(sigmaz(), qeye(2)) +  mu_B_g2 * tensor(qeye(2), sigmaz()))
+        H0_2 = 0
+        for i, sig1 in enumerate([sigmax(), sigmay(), sigmaz()]):
+            for j, sig2 in enumerate([sigmax(), sigmay(), sigmaz()]):
+                H0_2+= 0.25*J[i][j]*tensor(sig1,sig2)
+        np.set_printoptions(precision=3, suppress=True)
+        # print(H0_1 + H0_2)
+
+        # Pauli_decomp(H0_1+ H0_2)
 
         #Drive
         H_d1_I = [v1*tensor(sigmax(), qeye(2)) + v2* tensor(qeye(2), sigmax()) , lambda t, args: d1.I(t)]
@@ -237,8 +279,14 @@ class Experiment:
         H_d2_Q = [v1 * tensor(sigmay(), qeye(2)) + v2 * tensor(qeye(2), sigmay()), lambda t, args:d2.Q(t)]
 
 
-        H = [H0_1,  H_d1_I,  H_d1_Q,  H_d2_I, H_d2_Q]
+        # H = [H0_1, H0_2,  H_d1_I,  H_d1_Q,  H_d2_I, H_d2_Q]
+        H = Qobj(H0_1+H0_2)
         return H
+
+
+
+
+
 
     #FOR SUPERCONDUCTING QUBITS:
     # def create_H(self, drives, args):
@@ -299,6 +347,18 @@ class Experiment:
     #
     #     return H
 
+    def plot_eigenstates(self, drives, args):
+        detunings = np.linspace(-10, 10, 100)
+        eigen_energies = np.zeros((100, 4))
+        for i, eps in enumerate(detunings):
+            self.eps = eps
+            H = self.create_H(drives, args)
+            eigen_energies[i][:] = H.eigenstates()[0]
+
+        print(eigen_energies)
+        plt.plot(detunings, eigen_energies)
+        plt.show()
+
     #%% Simulate quantum process tomography for an 'unknown' (driven) process
     def simulate_qpt(self, **kwargs_flattened):
         #unflatten kwargs
@@ -329,6 +389,11 @@ class Experiment:
 
         #Choose the proportion of experiment time to stay at |11> to |20> transition frequency]
         H =  self.create_H(drives, args_cphase)
+
+        #%%
+        self.plot_eigenstates(drives, args_cphase)
+
+        #%%
         U_psi_real = qutip.propagator(H, times)
         np.set_printoptions(precision=1)
 
@@ -342,7 +407,7 @@ class Experiment:
 
         # IF CPHASE: Apply Virtual Z Gate
         if self.gate_type == 'Cphase':
-            U_psi_real_T = virtual_Z_cphase(U_psi_real_T)
+            U_psi_real_T = virtual_Z_cphase(U_psi_real_T, dim)
 
         #Convert U from state vector to density matrix form
         U_rho_real = spre(U_psi_real_T) * spost(U_psi_real_T.dag())
@@ -392,7 +457,7 @@ class Experiment:
         sigma_x = basis(3, 0) * basis(3, 1).dag() + basis(3, 1) * basis(3, 0).dag()
         sigma_y = -1j * basis(3, 0) * basis(3, 1).dag() + 1j * basis(3, 1) * basis(3, 0).dag()
         sigma_z = basis(3, 0) * basis(3, 0).dag() - basis(3, 1) * basis(3, 1).dag()
-
+,
         sigma_x1 = tensor(sigma_x, I)
         sigma_x2 = tensor(I, sigma_x)
 

@@ -127,7 +127,7 @@ iterations = int(best_hyperparameters['params']['num_iterations'])
 init_points = int(best_hyperparameters['params']['num_init_points'])
 alpha = best_hyperparameters['params']['alpha']
 
-
+ 
 optimizer = BayesianOptimization(
     f = objective,
     pbounds=flattened_bounds,
