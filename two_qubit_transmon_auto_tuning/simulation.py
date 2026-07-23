@@ -1,10 +1,34 @@
-#Imports
-import numpy as np
-from qutip import *
-import matplotlib.pyplot as plt
+"""Core simulation engine for two capacitively-coupled superconducting transmons.
 
-#%% Function that returns the 2-dim operational basis
+This module builds the time-dependent Hamiltonian of a two-transmon system,
+propagates it under user-defined control pulses, and evaluates how close the
+resulting quantum process is to a target gate. Each transmon is modelled as a
+three-level system (states |0>, |1>, |2>) so that leakage out of the
+computational subspace is captured rather than assumed away.
+
+Pipeline
+--------
+1. Define two ``Qubit`` objects and an ``Experiment`` (coupling, duration, gate).
+2. Shape the control drives (``GaussianPulse``, ``DRAG``) and, for the
+   entangling CPHASE gate, the flux-tuning trajectory (``LinearFluxTuning``).
+3. ``Experiment.simulate_qpt`` propagates the Hamiltonian with QuTiP, projects
+   onto the computational subspace, and runs quantum process tomography (QPT)
+   to obtain the process (chi) matrix.
+4. ``Experiment.fidelity_<GATE>`` compares that chi matrix against the ideal
+   gate via :func:`process_fidelity`, returning a scalar in [0, 1] that serves
+   as the objective for the Bayesian optimizer in ``optimization.py``.
+
+Units: angular frequencies are in rad/ns and times in ns, so a value of
+``6 * 2 * np.pi`` denotes a 6 GHz transition frequency.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from qutip import *
+
+
 def operational_basis(dim):
+    """Return the Pauli operator basis used for two-qubit process tomography."""
     if dim == 2:
         return [[qeye(2), sigmax(), sigmay(), sigmaz()]] * 2
 
@@ -203,8 +227,24 @@ def virtual_Z_cphase(U):
 
     return U_c
 
-#%% Class that defines the experiment
 class Experiment:
+    """A two-transmon experiment: builds the Hamiltonian, runs QPT, and scores gate fidelity.
+
+    Parameters
+    ----------
+    qubits : list[Qubit]
+        The two transmons ``[q1, q2]``.
+    g : float
+        Exchange coupling strength between the transmons (rad/ns).
+    t_exp : float
+        Total gate/experiment duration (ns).
+    gate_type : str
+        Target gate, e.g. ``'X'`` or ``'Cphase'``. Selecting ``'Cphase'`` turns
+        on the flux-tuning trajectory that brings |11> into resonance with |20>.
+    drive_shape : str
+        Control-pulse family: ``'Gaussian'``, ``'DRAG'`` or ``'GRAPE'``.
+    """
+
     def __init__(self, qubits, g, t_exp, gate_type, drive_shape):
         self.qubits = qubits
         self.g = g
@@ -212,7 +252,6 @@ class Experiment:
         self.gate_type = gate_type
         self.drive_shape = drive_shape
 
-#%% Hamiltonian-creating function
     def create_H(self, drives, args):
         qubits = self.qubits
         q1, q2 = qubits
