@@ -10,13 +10,13 @@ This module exposes three reusable pieces plus a runnable ``main``:
 
 * :func:`run_bayesian_optimization` -- maximize any fidelity objective over a
   bounded parameter space.
-* :func:`run_meta_optimization`     -- a *nested* Bayesian optimization that tunes
+* :func:`run_nested_optimization`     -- a *nested* Bayesian optimization that tunes
   the optimizer's own hyperparameters (acquisition weight, GP noise ``alpha``,
   number of init points and iterations).
 * :func:`default_cphase_experiment` / :func:`cphase_objective` -- the CPHASE
   set-up used to produce the results in the README.
 
-Run the full pipeline (meta-optimize, then optimize CPHASE) with::
+Run the full pipeline (nested hyperparameter tuning, then optimize CPHASE) with::
 
     python -m two_qubit_transmon_auto_tuning.optimization
 """
@@ -118,8 +118,8 @@ def run_bayesian_optimization(objective, pbounds, *, init_points, n_iter,
     return optimizer
 
 
-def run_meta_optimization(objective, pbounds, *, init_points=5, n_iter=10, random_state=1):
-    """Meta-optimize the optimizer: tune its hyperparameters with an outer BO.
+def run_nested_optimization(objective, pbounds, *, init_points=5, n_iter=10, random_state=1):
+    """Nested optimization: tune the optimizer's own hyperparameters with an outer BO.
 
     Each evaluation of the outer loop runs a *complete* inner Bayesian
     optimization for a candidate hyperparameter set and reports the best fidelity
@@ -144,25 +144,25 @@ def run_meta_optimization(objective, pbounds, *, init_points=5, n_iter=10, rando
         "num_init_points": (5, 20),
         "alpha": (1e-5, 1e-1),
     }
-    meta_optimizer = BayesianOptimization(
+    outer_optimizer = BayesianOptimization(
         f=hyperparameter_objective,
         pbounds=hyperparameter_bounds,
         random_state=random_state,
     )
-    meta_optimizer.maximize(init_points=init_points, n_iter=n_iter)
-    return meta_optimizer.max
+    outer_optimizer.maximize(init_points=init_points, n_iter=n_iter)
+    return outer_optimizer.max
 
 
 def main():
-    """Meta-optimize the optimizer, then auto-tune the CPHASE gate, then plot."""
+    """Tune the optimizer's hyperparameters, then auto-tune the CPHASE gate, then plot."""
     experiment = default_cphase_experiment()
     objective, pbounds = cphase_objective(experiment)
 
-    print("Meta-optimizing the Bayesian optimizer's hyperparameters ...")
-    best = run_meta_optimization(objective, pbounds)
+    print("Nested optimization: tuning the Bayesian optimizer's hyperparameters ...")
+    best = run_nested_optimization(objective, pbounds)
     hp = best["params"]
     print(f"  best hyperparameters : {hp}")
-    print(f"  fidelity at meta-optimum : {best['target']:.6f}")
+    print(f"  fidelity at best hyperparameters : {best['target']:.6f}")
 
     print("Auto-tuning the CPHASE gate with the tuned hyperparameters ...")
     optimizer = run_bayesian_optimization(

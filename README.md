@@ -21,7 +21,7 @@ quality is scored with full **quantum process tomography**.
 |------|-------------------|----------|:----------------:|
 | **CPHASE / CZ** | Flux-tune qubit into the \|11⟩–\|20⟩ resonance + virtual-Z correction | Bayesian optimization | **0.9998** |
 | **X** (single-qubit) | Resonant microwave drive | Bayesian optimization (~40 evals) | **≈0.99** |
-| **CPHASE** (meta-tuned) | As above | Bayesian optimization *of the optimizer's own hyperparameters* | **0.9996** |
+| **CPHASE** (nested-tuned) | As above | Bayesian optimization *of the optimizer's own hyperparameters* | **0.9996** |
 
 > Fidelity is the process fidelity `Tr(χ_ideal · χ_real)`; for these unitary
 > targets it is 1.0 for a perfect gate (verified numerically), so 0.9998 means a
@@ -67,8 +67,9 @@ gate's χ gives a single scalar fidelity — the objective the optimizer maximiz
 **4. Auto-tuning.** The fidelity landscape is non-convex, periodic, and expensive
 to evaluate, so a **Gaussian-process Bayesian optimizer** searches it, reaching
 high fidelity in tens of evaluations instead of an exhaustive sweep. A second,
-**nested ("meta") optimization** tunes the optimizer's own hyperparameters
-(acquisition weight, GP noise, number of init points and iterations).
+**nested optimization** then tunes the optimizer's own hyperparameters
+(acquisition weight, GP noise, number of init points and iterations) — an outer
+Bayesian loop wrapped around the inner one.
 
 ---
 
@@ -101,14 +102,14 @@ fidelity climbs toward 1.0 as it explores (right).
 </tr>
 </table>
 
-### Meta-optimization
+### Nested optimization (hyperparameter tuning)
 
 Tuning the optimizer's *own* hyperparameters with an outer Bayesian loop drives
 the CPHASE fidelity to **0.9996**, locking on after ~16 iterations.
 
 <table>
 <tr>
-<td align="center"><img src="docs/images/meta-optimization-convergence.png" width="380"><br><sub><b>Fidelity vs. iteration with meta-tuned hyperparameters</b></sub></td>
+<td align="center"><img src="docs/images/nested-optimization-convergence.png" width="380"><br><sub><b>Fidelity vs. iteration with nested-tuned hyperparameters</b></sub></td>
 <td align="center"><img src="docs/images/x-chi-optimized.png" width="330"><br><sub><b>Optimized single-qubit X process (chi)</b></sub></td>
 </tr>
 </table>
@@ -131,7 +132,7 @@ per-iteration Bayesian runs — are in [`docs/images/`](docs/images).)*
 ```
 two_qubit_transmon_auto_tuning/
 ├── simulation.py       # Core engine: Hamiltonian, pulses, propagation, QPT, fidelity
-├── optimization.py     # Bayesian auto-tuning + nested meta-optimization
+├── optimization.py     # Bayesian auto-tuning + nested hyperparameter optimization
 └── exploratory/        # Early standalone prototypes, kept for provenance
 examples/
 ├── run_cphase.py             # Evaluate the tuned CPHASE gate + plot its chi matrix
@@ -140,7 +141,7 @@ examples/
 tests/                  # pytest suite (fidelity regressions, tomography sanity checks)
 docs/
 ├── images/             # Result figures
-└── results/            # Saved meta-optimization hyperparameters
+└── results/            # Saved tuned optimizer hyperparameters
 ```
 
 ## Installation
@@ -166,7 +167,7 @@ poetry run python examples/run_cphase.py
 # Auto-tune an X gate from scratch (reaches ~0.99 in a few dozen evaluations)
 poetry run python examples/optimize_x_gate.py
 
-# Run the full pipeline: meta-optimize, then tune CPHASE
+# Run the full pipeline: nested hyperparameter tuning, then tune CPHASE
 poetry run tqtat-optimize
 ```
 
@@ -182,7 +183,7 @@ experiment = default_cphase_experiment()
 objective, bounds = cphase_objective(experiment)
 optimizer = run_bayesian_optimization(
     objective, bounds, init_points=5, n_iter=16,
-    acquisition_weight=4.75, alpha=0.072,   # meta-tuned hyperparameters
+    acquisition_weight=4.75, alpha=0.072,   # nested-tuned hyperparameters
 )
 print(optimizer.max["target"])   # -> ~0.9996
 ```

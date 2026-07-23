@@ -8,7 +8,7 @@ Simulation (``two_qubit_transmon_auto_tuning.simulation``):
     ``flatten_dict`` / ``unflatten_dict`` / ``process_fidelity``.
 
 Optimization (``two_qubit_transmon_auto_tuning.optimization``):
-    ``run_bayesian_optimization``, ``run_meta_optimization``,
+    ``run_bayesian_optimization``, ``run_nested_optimization``,
     ``default_cphase_experiment`` and ``cphase_objective``.
 """
 
@@ -30,7 +30,7 @@ from .simulation import (
 )
 from .optimization import (
     run_bayesian_optimization,
-    run_meta_optimization,
+    run_nested_optimization,
     default_cphase_experiment,
     cphase_objective,
     x_gate_objective,
@@ -54,7 +54,7 @@ __all__ = [
     "process_fidelity",
     "operational_basis",
     "run_bayesian_optimization",
-    "run_meta_optimization",
+    "run_nested_optimization",
     "default_cphase_experiment",
     "cphase_objective",
     "x_gate_objective",
